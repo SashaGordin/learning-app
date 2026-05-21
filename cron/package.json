@@ -1,0 +1,19 @@
+{
+  "name": "learning-backlog-cron",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "daily": "node daily_brief.js",
+    "weekly": "node weekly_brief.js",
+    "curator": "node curator.js",
+    "scheduler": "node scheduler.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "marked": "^14.1.0",
+    "node-cron": "^3.0.3",
+    "resend": "^4.0.0"
+  }
+}

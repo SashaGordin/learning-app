@@ -1,0 +1,32 @@
+name: learning-backlog
+
+services:
+  # Static web server for the local copy of the PWA.
+  # Accessible at http://localhost:8080 once `docker compose up -d` is running.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Cron container. Runs daily_brief / weekly_brief / curator on schedule.
+  # Mounts ./frontend read-write so the curator can update the SEED in place.
+  cron:
+    build: ./cron
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ./frontend:/app/frontend           # curator writes SEED here
+      - ./cron:/app/cron                    # mounted for easy iteration; remove for prod
+    init: true
+
+volumes:
+  caddy_data:
+  caddy_config:

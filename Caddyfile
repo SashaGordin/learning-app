@@ -1,0 +1,20 @@
+# Serve the PWA on http://localhost:8080.
+# (Cloud-hosted PWA on Cloudflare Pages is what your phone will install;
+#  this local server is for laptop browsing.)
+:80 {
+    root * /srv
+    file_server
+    try_files {path} {path}/ /index.html
+
+    # Cache the shell aggressively except for the entry point.
+    @assets path *.png *.svg *.ico *.json *.js
+    header @assets Cache-Control "public, max-age=86400"
+
+    @html path /index.html /
+    header @html Cache-Control "no-cache"
+
+    log {
+        output stdout
+        format console
+    }
+}

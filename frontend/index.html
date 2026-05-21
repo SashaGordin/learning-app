@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f59e0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Learning">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>Learning Backlog</title>
+
+<!-- Supabase config — leave empty to disable sync (works offline-only). -->
+<meta name="supabase-url" content="">
+<meta name="supabase-anon-key" content="">
+
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    background: #fafaf9; color: #1f2937;
+    line-height: 1.45; font-size: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px;}
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: #6b7280; font-size: 13px; }
+  .hbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hbtns button {
+    padding: 7px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: white; font: inherit; cursor: pointer; color: #1f2937; font-size: 13px;
+  }
+  .hbtns button:hover { background: #f3f4f6; }
+
+  /* Sync indicator */
+  .sync-pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px;
+    background: #f3f4f6; border-radius: 999px; font-size: 11.5px; color: #6b7280;
+  }
+  .sync-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; }
+  .sync-pill.ok .dot { background: #10b981; }
+  .sync-pill.syncing .dot { background: #f59e0b; animation: pulse 1.2s infinite; }
+  .sync-pill.err .dot { background: #ef4444; }
+  .sync-pill.offline .dot { background: #6b7280; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:.3} }
+
+  .tabs { display: flex; gap: 4px; margin: 16px 0 14px; border-bottom: 1px solid #e5e7eb; overflow-x: auto; }
+  .tab {
+    padding: 8px 14px; cursor: pointer; font-size: 13.5px; font-weight: 500; color: #6b7280;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none; white-space: nowrap;
+  }
+  .tab:hover { color: #1f2937; }
+  .tab.active { color: #111827; border-bottom-color: #f59e0b; }
+  .tab .count {
+    background: #f3f4f6; color: #6b7280; font-size: 11px; padding: 1px 6px;
+    border-radius: 999px; margin-left: 5px; font-weight: 600;
+  }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Up Next cards */
+  .next-card {
+    background: white; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 16px; margin-bottom: 10px;
+    display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start;
+  }
+  .next-card.primary { border-color: #f59e0b; box-shadow: 0 1px 0 #fde9c5; }
+  .next-card .order { font-size: 22px; font-weight: 600; color: #d1d5db; text-align: center; }
+  .next-card.primary .order { color: #f59e0b; }
+  .next-card .title { font-weight: 600; font-size: 15px; }
+  .next-card .title a { color: #111827; text-decoration: none; }
+  .next-card .title a:hover { text-decoration: underline; }
+  .next-card .meta { color: #6b7280; font-size: 12.5px; margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .next-card .why { color: #4b5563; font-size: 13px; margin-top: 6px; }
+  .next-card .actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .next-card .actions button, .next-card .actions a {
+    padding: 7px 14px; border-radius: 8px; font: inherit; font-size: 13px;
+    cursor: pointer; text-decoration: none; flex: 1; min-width: 100px; text-align: center;
+  }
+  .next-card .actions .open { background: #111827; color: white; border: 1px solid #111827; }
+  .next-card .actions .open:hover { background: #1f2937; }
+  .next-card .actions .skip, .next-card .actions .start, .next-card .actions .done {
+    background: white; color: #374151; border: 1px solid #e5e7eb;
+  }
+  .next-card .actions .skip:hover, .next-card .actions .start:hover, .next-card .actions .done:hover { background: #f3f4f6; }
+  .next-progress {
+    background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 16px;
+    margin-bottom: 14px;
+  }
+  .next-progress .head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+  .next-progress .head b { color: #111827; }
+  .next-progress .bar { height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+  .next-progress .bar > div { height: 100%; background: linear-gradient(90deg, #f59e0b, #10b981); transition: width .2s; }
+  .next-empty {
+    background: white; border: 1px dashed #e5e7eb; border-radius: 12px; padding: 30px;
+    text-align: center; color: #6b7280;
+  }
+
+  /* Learning Path */
+  .tier {
+    background: white; border: 1px solid #e5e7eb; border-radius: 12px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .tier-head {
+    padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px;
+    align-items: center; background: linear-gradient(180deg, #ffffff, #fafaf9);
+  }
+  .tier-head:hover { background: #f9fafb; }
+  .tier-title { font-weight: 600; font-size: 14.5px; }
+  .tier-title .tier-num {
+    display: inline-block; min-width: 22px; height: 22px; line-height: 22px; text-align: center;
+    background: #f59e0b; color: white; border-radius: 6px; font-size: 12px; margin-right: 8px; font-weight: 700;
+  }
+  .tier-desc { font-size: 12.5px; color: #6b7280; margin-top: 2px; }
+  .tier-progress { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: #6b7280; min-width: 140px; }
+  .tier-progress .bar { flex: 1; height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
+  .tier-progress .bar > div { height: 100%; background: #10b981; transition: width .2s; }
+  .tier-body { display: none; padding: 4px 8px 8px; }
+  .tier.open .tier-body { display: block; }
+  .tier-head .chev { color: #9ca3af; transition: transform .15s; }
+  .tier.open .tier-head .chev { transform: rotate(90deg); }
+
+  .path-item {
+    display: grid; grid-template-columns: 24px 22px 1fr auto; gap: 8px;
+    align-items: center; padding: 9px 8px; border-radius: 8px; margin: 1px 0;
+  }
+  .path-item:hover { background: #f9fafb; }
+  .path-item.done { opacity: 0.5; }
+  .path-item.locked { opacity: 0.55; }
+  .path-item .step { color: #9ca3af; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
+  .path-item .status-icon {
+    width: 20px; height: 20px; border: 1.5px solid #d1d5db; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 12px; line-height: 1; user-select: none;
+  }
+  .path-item.done .status-icon { background: #10b981; color: white; border-color: #10b981; }
+  .path-item.in-progress .status-icon { background: #f59e0b; color: white; border-color: #f59e0b; }
+  .path-item .title { font-size: 13.5px; min-width: 0; }
+  .path-item .title a { color: #111827; text-decoration: none; font-weight: 500; }
+  .path-item .title a:hover { text-decoration: underline; }
+  .path-item .title .why { color: #6b7280; font-size: 12px; margin-top: 2px; font-weight: normal; }
+  .path-item .duration { color: #6b7280; font-size: 12px; white-space: nowrap; }
+  .path-item .lock { color: #9ca3af; font-size: 11px; }
+
+  /* Backlog */
+  .controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0 14px; }
+  .controls input[type="search"] {
+    flex: 1; min-width: 180px; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
+    font: inherit; background: white;
+  }
+  .controls select, .controls button {
+    padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: white; font: inherit; cursor: pointer; color: #1f2937; font-size: 13px;
+  }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; color: #4b5563; font-size: 12.5px; margin-bottom: 12px; }
+  .stat b { color: #111827; font-weight: 600; }
+  .row {
+    background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px;
+    display: grid; grid-template-columns: 1fr auto; gap: 10px 14px; align-items: start;
+  }
+  .row.done { opacity: 0.55; }
+  .row .title a { color: #111827; font-weight: 600; text-decoration: none; }
+  .row .meta { color: #6b7280; font-size: 12px; margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row .meta .tag { background: #f3f4f6; padding: 1.5px 7px; border-radius: 999px; font-size: 11.5px; color: #374151; }
+  .row .meta .tag.prio-high { background: #fee2e2; color: #991b1b; }
+  .row .meta .tag.prio-med { background: #fef3c7; color: #92400e; }
+  .row .meta .tag.prio-low { background: #e0e7ff; color: #3730a3; }
+  .row .meta .tag.type-Video { background: #fce7f3; color: #9d174d; }
+  .row .meta .tag.type-Podcast { background: #ede9fe; color: #5b21b6; }
+  .row .meta .tag.type-Article { background: #dcfce7; color: #166534; }
+  .row .meta .tag.type-Tutorial { background: #cffafe; color: #155e75; }
+  .row .meta .tag.type-Course { background: #fef9c3; color: #854d0e; }
+  .row .meta .tag.type-Repo { background: #e5e7eb; color: #1f2937; }
+  .row .meta .tag.type-Newsletter { background: #fae8ff; color: #86198f; }
+  .row .meta .tag.new { background: #dbeafe; color: #1e40af; }
+  .row .why { color: #4b5563; font-size: 12.5px; margin-top: 4px; }
+  .row .status {
+    appearance: none; padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb;
+    background: white; font: inherit; font-size: 12px;
+  }
+  .row-right { display: flex; flex-direction: column; gap: 6px; align-items: end; }
+  .row-right .duration { color: #6b7280; font-size: 12px; }
+
+  .group-header {
+    font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 18px 4px 8px;
+  }
+  .empty { text-align: center; color: #9ca3af; padding: 30px; font-size: 13px; }
+  footer { color: #9ca3af; font-size: 12px; margin-top: 30px; text-align: center; }
+
+  /* Settings modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none;
+    align-items: center; justify-content: center; z-index: 100; padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: white; border-radius: 14px; padding: 22px;
+    max-width: 460px; width: 100%; box-shadow: 0 20px 48px rgba(0,0,0,0.2);
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal h2 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  .modal .desc { color: #6b7280; font-size: 13px; margin-bottom: 18px; }
+  .modal h3 { font-size: 13px; font-weight: 600; margin: 18px 0 6px; color: #374151; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sync-code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 10px 12px; font-size: 14px; word-break: break-all;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .sync-code .id { flex: 1; user-select: all; }
+  .sync-code button {
+    padding: 4px 10px; border-radius: 6px; border: 1px solid #e5e7eb;
+    background: white; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .pair-row { display: flex; gap: 6px; margin-top: 6px; }
+  .pair-row input {
+    flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #e5e7eb;
+    font: inherit; font-size: 13px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .pair-row button {
+    padding: 8px 12px; border-radius: 8px; border: 1px solid #111827;
+    background: #111827; color: white; cursor: pointer; font: inherit; font-size: 13px;
+  }
+  .modal-actions {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px;
+  }
+  .modal-actions button {
+    padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb;
+    background: white; cursor: pointer; font: inherit; font-size: 13px; flex: 1;
+  }
+  .modal-actions .danger { color: #991b1b; border-color: #fecaca; }
+  .modal-actions .close { background: #111827; color: white; border-color: #111827; flex: none; min-width: 80px; }
+  .last-sync { font-size: 12px; color: #6b7280; margin-top: 6px; }
+
+  /* Install prompt for PWA */
+  .install-banner {
+    position: fixed; bottom: 16px; left: 16px; right: 16px;
+    background: #111827; color: white; padding: 12px 16px; border-radius: 12px;
+    display: none; align-items: center; justify-content: space-between; gap: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 50; font-size: 13.5px;
+  }
+  .install-banner.show { display: flex; }
+  .install-banner button {
+    padding: 6px 12px; border-radius: 6px; border: 1px solid #374151;
+    background: #1f2937; color: white; cursor: pointer; font: inherit; font-size: 13px;
+  }
+  .install-banner .accept {
+    background: #f59e0b; border-color: #f59e0b; color: #111827; font-weight: 600;
+  }
+
+  @media (max-width: 600px) {
+    .wrap { padding: 14px 12px 90px; }
+    h1 { font-size: 20px; }
+    .tier-progress { min-width: 100px; }
+    .path-item .duration:nth-last-child(1):not(:nth-child(4)) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Learning Backlog</h1>
+      <div class="sub" id="sub">Curated path through agentic engineering, Claude Code, and LLM foundations.</div>
+      <div style="margin-top:6px"><span id="sync-pill" class="sync-pill"><span class="dot"></span><span id="sync-text">Offline</span></span></div>
+    </div>
+    <div class="hbtns">
+      <button id="add-btn" title="Add a custom item">+ Add</button>
+      <button id="settings-btn" title="Sync, export, reset">Settings</button>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-view="next">Up next<span class="count" id="count-next">0</span></div>
+    <div class="tab" data-view="path">Learning path<span class="count" id="count-path">0</span></div>
+    <div class="tab" data-view="backlog">Backlog<span class="count" id="count-backlog">0</span></div>
+    <div class="tab" data-view="ongoing">Ongoing reads<span class="count" id="count-ongoing">0</span></div>
+  </div>
+
+  <div class="view active" id="view-next">
+    <div class="next-progress" id="next-progress"></div>
+    <div id="next-cards"></div>
+  </div>
+  <div class="view" id="view-path"><div id="path-tiers"></div></div>
+  <div class="view" id="view-backlog">
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search title, source, why…">
+      <select id="filter-cat"><option value="">All categories</option></select>
+      <select id="filter-type"><option value="">All types</option></select>
+      <select id="filter-status">
+        <option value="all">All progress</option>
+        <option value="open">Not started + in progress</option>
+        <option value="todo">Not started</option>
+        <option value="in_progress">In progress</option>
+        <option value="done">Done</option>
+      </select>
+      <select id="sort">
+        <option value="recency">Sort: Recent</option>
+        <option value="priority">Sort: Priority</option>
+        <option value="duration">Sort: Shortest</option>
+        <option value="duration-desc">Sort: Longest</option>
+        <option value="title">Sort: Title</option>
+      </select>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div id="backlog-list"></div>
+  </div>
+  <div class="view" id="view-ongoing">
+    <div class="sub" style="margin-bottom:12px">Subscriptions and feeds you check regularly — not part of the sequenced path.</div>
+    <div id="ongoing-list"></div>
+  </div>
+
+  <footer>Curated weekly. Sync via Supabase. Install to home screen for the app experience.</footer>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <h2>Settings</h2>
+    <div class="desc">Pair devices with a sync code, export your progress, or reset.</div>
+
+    <h3>Sync code (this device)</h3>
+    <div class="sync-code">
+      <span class="id" id="sync-id-display">—</span>
+      <button id="copy-sync">Copy</button>
+    </div>
+    <div class="last-sync" id="last-sync-text">Sync disabled</div>
+
+    <h3>Pair another device</h3>
+    <div class="desc" style="margin-top:-4px;font-size:12px">Paste a sync code from another device to share state with this one.</div>
+    <div class="pair-row">
+      <input type="text" id="pair-input" placeholder="paste sync code…">
+      <button id="pair-btn">Pair</button>
+    </div>
+
+    <h3>Backup</h3>
+    <div class="modal-actions" style="margin-top:6px">
+      <button id="export-btn">Export JSON</button>
+      <button id="import-btn">Import JSON</button>
+    </div>
+
+    <div class="modal-actions">
+      <button id="reset-btn" class="danger">Reset all progress</button>
+      <button id="close-modal" class="close">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="install-banner" id="install-banner">
+  <span>Add to home screen for the full app experience.</span>
+  <div style="display:flex; gap:8px">
+    <button id="install-dismiss">Not now</button>
+    <button id="install-accept" class="accept">Install</button>
+  </div>
+</div>
+
+<script type="module">
+// ============= Data =============
+// SEED_START
+const SEED = [
+  { id:"karp-intro-llms", tier:1, order:10, prereqs:[], category:"Fundamentals", type:"Video",
+    title:"Intro to Large Language Models",
+    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=zjkBMFhNj_g", min:60, prio:"high",
+    why:"The canonical 1-hour mental model for LLMs. Start here.", addedAt:"2026-05-20" },
+  { id:"karp-software30", tier:1, order:20, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Video",
+    title:"Software 3.0 — LLMs as a new programming substrate",
+    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=LCEmiRjPEtQ", min:40, prio:"high",
+    why:"Mental model for the whole shift you're working inside.", addedAt:"2026-05-20" },
+  { id:"lilian-agents", tier:1, order:30, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Article",
+    title:"LLM Powered Autonomous Agents",
+    source:"Lilian Weng", url:"https://lilianweng.github.io/posts/2023-06-23-agent/", min:30, prio:"high",
+    why:"Canonical taxonomy of agent architectures (planning, memory, tools).", addedAt:"2026-05-20" },
+  { id:"karp-deep-dive-llms", tier:1, order:40, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Video",
+    title:"Deep Dive into LLMs like ChatGPT",
+    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=7xTGNNLPyMI", min:210, prio:"med",
+    why:"Optional 3.5 hr expansion — pretraining, RLHF, hallucinations. Save for a long commute.", addedAt:"2026-05-20" },
+
+  { id:"anthropic-effective-agents", tier:2, order:10, prereqs:["lilian-agents"], category:"Agentic Engineering", type:"Article",
+    title:"Building Effective Agents",
+    source:"Anthropic Engineering", url:"https://www.anthropic.com/engineering/building-effective-agents", min:25, prio:"high",
+    why:"Anthropic's guide to workflows vs agents, with concrete patterns.", addedAt:"2026-05-20" },
+  { id:"anthropic-multiagent", tier:2, order:20, prereqs:["anthropic-effective-agents"], category:"Agentic Engineering", type:"Article",
+    title:"How we built our multi-agent research system",
+    source:"Anthropic Engineering", url:"https://www.anthropic.com/engineering/multi-agent-research-system", min:25, prio:"high",
+    why:"Real production multi-agent system — orchestrator/worker patterns, what broke.", addedAt:"2026-05-20" },
+  { id:"mcp-intro", tier:2, order:30, prereqs:[], category:"Agentic Engineering", type:"Article",
+    title:"Model Context Protocol — introduction",
+    source:"modelcontextprotocol.io", url:"https://modelcontextprotocol.io/introduction", min:40, prio:"high",
+    why:"MCP is now the interop layer for every coding agent. Read before building tools.", addedAt:"2026-05-20" },
+  { id:"anthropic-cookbook", tier:2, order:40, prereqs:["anthropic-effective-agents"], category:"Agentic Engineering", type:"Repo",
+    title:"Anthropic Cookbook",
+    source:"github.com/anthropics", url:"https://github.com/anthropics/anthropic-cookbook", min:60, prio:"high",
+    why:"Working notebooks for tool use, RAG, agents, evals.", addedAt:"2026-05-20" },
+  { id:"simonw-agentic-patterns", tier:2, order:50, prereqs:["anthropic-effective-agents"], category:"Agentic Engineering", type:"Article",
+    title:"Agentic engineering patterns",
+    source:"Simon Willison", url:"https://simonwillison.net/2026/Feb/23/agentic-engineering-patterns/", min:20, prio:"med",
+    why:"Practitioner's view on what patterns are actually holding up in 2026.", addedAt:"2026-05-20" },
+
+  { id:"cc-docs", tier:3, order:10, prereqs:["mcp-intro"], category:"Claude Code", type:"Article",
+    title:"Claude Code — official documentation",
+    source:"docs.claude.com", url:"https://code.claude.com/docs/en/overview", min:60, prio:"high",
+    why:"Top-level docs. Skim everything; deep-read hooks, MCP, slash commands, sub-agents.", addedAt:"2026-05-20" },
+  { id:"cc-best-practices", tier:3, order:20, prereqs:["cc-docs"], category:"Claude Code", type:"Article",
+    title:"Claude Code: best practices for agentic coding",
+    source:"Anthropic Engineering", url:"https://www.anthropic.com/engineering/claude-code-best-practices", min:25, prio:"high",
+    why:"Anthropic's own playbook — CLAUDE.md, planning, custom tools. Re-read quarterly.", addedAt:"2026-05-20" },
+  { id:"cc-skills", tier:3, order:30, prereqs:["cc-docs"], category:"Claude Code", type:"Article",
+    title:"Claude Code Skills + Agent SDK",
+    source:"docs.claude.com", url:"https://docs.claude.com/en/docs/claude-code/skills", min:30, prio:"high",
+    why:"Skills + sub-agents. Powering Cowork itself.", addedAt:"2026-05-20" },
+  { id:"cc-hooks", tier:3, order:40, prereqs:["cc-docs"], category:"Claude Code", type:"Article",
+    title:"Hooks — lifecycle automation in Claude Code",
+    source:"docs.claude.com", url:"https://docs.claude.com/en/docs/claude-code/hooks", min:20, prio:"med",
+    why:"Pre/post hooks for formatters, gating, logging. Unlock real workflows.", addedAt:"2026-05-20" },
+  { id:"cc-agent-view", tier:3, order:50, prereqs:["cc-best-practices"], category:"Claude Code", type:"Article",
+    title:"Claude Code — what's new (Agent View, /goal, Opus 4.7)",
+    source:"code.claude.com", url:"https://code.claude.com/docs/en/whats-new", min:15, prio:"high",
+    why:"Recent release. Agent View changes how you run 5+ concurrent agents.", addedAt:"2026-05-20" },
+  { id:"cc-mcp-build", tier:3, order:60, prereqs:["mcp-intro"], category:"Claude Code", type:"Tutorial",
+    title:"Build an MCP server from scratch",
+    source:"modelcontextprotocol.io", url:"https://modelcontextprotocol.io/quickstart/server", min:60, prio:"med",
+    why:"You'll build your own connectors eventually. Quickstart is the right entry.", addedAt:"2026-05-20" },
+
+  { id:"nous-hermes", tier:4, order:10, prereqs:["anthropic-effective-agents"], category:"Open Models", type:"Article",
+    title:"Hermes Agent — Nous Research",
+    source:"nousresearch.com", url:"https://hermes-agent.nousresearch.com/", min:25, prio:"high",
+    why:"The #1 agent on OpenRouter (May 2026). The open alternative that's actually working.", addedAt:"2026-05-20" },
+  { id:"opencode", tier:4, order:20, prereqs:["cc-best-practices"], category:"Coding Agents", type:"Repo",
+    title:"OpenCode — open-source coding agent",
+    source:"github.com/opencode-ai/opencode", url:"https://github.com/opencode-ai/opencode", min:30, prio:"med",
+    why:"Open alternative to Claude Code.", addedAt:"2026-05-20" },
+  { id:"aider", tier:4, order:30, prereqs:[], category:"Coding Agents", type:"Repo",
+    title:"Aider — AI pair programming in your terminal",
+    source:"aider.chat", url:"https://aider.chat/", min:25, prio:"med",
+    why:"Older but influential. Repo-map and edit-format ideas show up everywhere.", addedAt:"2026-05-20" },
+  { id:"cursor-docs", tier:4, order:40, prereqs:["cc-best-practices"], category:"Coding Agents", type:"Article",
+    title:"Cursor: agent mode + composer fundamentals",
+    source:"cursor.com/docs", url:"https://docs.cursor.com/", min:30, prio:"med",
+    why:"Different UX bet from Claude Code. Know your competition.", addedAt:"2026-05-20" },
+  { id:"codex-cli", tier:4, order:50, prereqs:[], category:"Coding Agents", type:"Repo",
+    title:"OpenAI Codex CLI",
+    source:"github.com/openai/codex", url:"https://github.com/openai/codex", min:25, prio:"med",
+    why:"OpenAI's CLI agent. Useful comparison to Claude Code's approach.", addedAt:"2026-05-20" },
+  { id:"cline", tier:4, order:60, prereqs:[], category:"Coding Agents", type:"Repo",
+    title:"Cline — VS Code agent",
+    source:"github.com/cline/cline", url:"https://github.com/cline/cline", min:20, prio:"low",
+    why:"Popular VS Code agent extension. Different surface, similar primitives.", addedAt:"2026-05-20" },
+
+  { id:"karp-build-gpt", tier:5, order:10, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Video",
+    title:"Let's build GPT: from scratch, in code, spelled out",
+    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=kCc8FmEb1nY", min:117, prio:"high",
+    why:"Build a tiny transformer line by line. Best with a laptop on a quiet evening.", addedAt:"2026-05-20" },
+  { id:"karp-tokenizer", tier:5, order:20, prereqs:["karp-build-gpt"], category:"Fundamentals", type:"Video",
+    title:"Let's build the GPT tokenizer",
+    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=zduSFxRajkE", min:135, prio:"med",
+    why:"Why tokens matter — explains a lot of weird LLM behavior.", addedAt:"2026-05-20" },
+  { id:"karp-gpt2", tier:5, order:30, prereqs:["karp-build-gpt"], category:"Fundamentals", type:"Video",
+    title:"Let's reproduce GPT-2 (124M)",
+    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=l8pRSuU81PU", min:240, prio:"med",
+    why:"4-hour deep build. Do after 'Let's build GPT'.", addedAt:"2026-05-20" },
+  { id:"karp-zero-hero", tier:5, order:40, prereqs:["karp-build-gpt"], category:"Fundamentals", type:"Course",
+    title:"Neural Networks: Zero to Hero (full playlist)",
+    source:"Andrej Karpathy", url:"https://karpathy.ai/zero-to-hero.html", min:900, prio:"med",
+    why:"~15 hours from backprop to GPT. Pace it across many weeks.", addedAt:"2026-05-20" },
+
+  { id:"simonw", tier:0, order:10, prereqs:[], category:"Daily Reads", type:"Newsletter",
+    title:"Simon Willison's blog", source:"simonwillison.net", url:"https://simonwillison.net/", min:15, prio:"high",
+    why:"Highest signal AI blog day-to-day. Concise, technical, well-linked.", addedAt:"2026-05-20" },
+  { id:"raschka-llm-trends", tier:0, order:20, prereqs:[], category:"Daily Reads", type:"Newsletter",
+    title:"Sebastian Raschka — Ahead of AI", source:"sebastianraschka.com", url:"https://magazine.sebastianraschka.com/", min:30, prio:"med",
+    why:"Clear, technical monthly summaries of LLM/agent research.", addedAt:"2026-05-20" },
+  { id:"karp-blog", tier:0, order:30, prereqs:[], category:"Daily Reads", type:"Article",
+    title:"Karpathy's blog", source:"karpathy.github.io", url:"https://karpathy.github.io/", min:30, prio:"med",
+    why:"Browse occasionally — 'Recipe for Training NNs', classics.", addedAt:"2026-05-20" },
+  { id:"latent-space", tier:0, order:40, prereqs:[], category:"Podcasts", type:"Podcast",
+    title:"Latent Space (Alessio Fanelli + swyx)", source:"latent.space", url:"https://www.latent.space/", min:75, prio:"high",
+    why:"Highest signal-per-minute AI eng podcast.", addedAt:"2026-05-20" },
+  { id:"dwarkesh", tier:0, order:50, prereqs:[], category:"Podcasts", type:"Podcast",
+    title:"Dwarkesh Podcast", source:"dwarkesh.com", url:"https://www.dwarkesh.com/podcast", min:120, prio:"high",
+    why:"Long-form interviews with frontier-lab people. Built for commute.", addedAt:"2026-05-20" },
+  { id:"no-priors", tier:0, order:60, prereqs:[], category:"Podcasts", type:"Podcast",
+    title:"No Priors", source:"no-priors.com", url:"https://www.no-priors.com/", min:60, prio:"med",
+    why:"Founder/exec angle. Good when you want strategy, not internals.", addedAt:"2026-05-20" },
+  { id:"hn-ai", tier:0, order:80, prereqs:[], category:"Daily Reads", type:"Newsletter",
+    title:"Hacker News — AI/agent stories (past week)", source:"news.ycombinator.com",
+    url:"https://hn.algolia.com/?dateRange=pastWeek&query=agent&sort=byPopularity&type=story", min:15, prio:"low",
+    why:"Skim weekly. Comments often more useful than the article.", addedAt:"2026-05-20" },
+  { id:"hf-trending", tier:0, order:90, prereqs:[], category:"Open Models", type:"Article",
+    title:"Hugging Face trending models", source:"huggingface.co",
+    url:"https://huggingface.co/models?sort=trending", min:10, prio:"low",
+    why:"Weekly skim. Surface new open releases before the news cycle.", addedAt:"2026-05-20" },
+];
+// SEED_END
+
+// CHANGELOG_START
+const CHANGELOG = [
+  { date: "2026-05-20", note: "Initial backlog — 33 items across 5 path tiers + ongoing reads." }
+];
+// CHANGELOG_END
+
+const TIER_META = {
+  1: { name: "Foundations", desc: "Mental models for LLMs and agents. Start here." },
+  2: { name: "Agentic engineering patterns", desc: "Concrete patterns: workflows vs agents, multi-agent, MCP." },
+  3: { name: "Claude Code mastery", desc: "Build seriously with Claude Code — docs, hooks, skills, MCP servers." },
+  4: { name: "Agent ecosystem", desc: "Open-source agents and competing tools." },
+  5: { name: "Deep dives", desc: "Optional internals. Build a GPT, the tokenizer, GPT-2." },
+};
+
+// ============= Supabase sync =============
+const SUPABASE_URL  = document.querySelector('meta[name="supabase-url"]').content.trim();
+const SUPABASE_ANON = document.querySelector('meta[name="supabase-anon-key"]').content.trim();
+const SYNC_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON);
+
+let supabase = null;
+if (SYNC_ENABLED) {
+  const mod = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
+  supabase = mod.createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false } });
+}
+
+// Generate a sync code: 4 groups of 5 lowercase alphanumeric chars, separated by dashes.
+function newSyncId() {
+  const alpha = "abcdefghjkmnpqrstuvwxyz23456789"; // ambiguity-free
+  let out = "";
+  for (let g = 0; g < 4; g++) {
+    if (g) out += "-";
+    for (let i = 0; i < 5; i++) out += alpha[Math.floor(Math.random()*alpha.length)];
+  }
+  return out;
+}
+function ensureSyncId() {
+  let id = localStorage.getItem("sync_id");
+  if (!id) {
+    id = newSyncId();
+    localStorage.setItem("sync_id", id);
+  }
+  return id;
+}
+const SYNC_ID = ensureSyncId();
+
+// ============= Local state =============
+const STORAGE_KEY = "learning_backlog_v2";
+function loadLocal() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveLocal(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+
+let state = loadLocal();
+state.items = state.items || {};
+state.custom = state.custom || {};
+state.collapsed = state.collapsed || {};
+state.updatedAt = state.updatedAt || new Date(0).toISOString();
+
+// ============= Sync layer =============
+const SyncStatus = { off: "off", pulling: "pulling", pushing: "pushing", idle: "idle", error: "error" };
+let lastSync = null;
+
+function updateSyncPill(status, msg) {
+  const pill = document.getElementById("sync-pill");
+  const text = document.getElementById("sync-text");
+  pill.classList.remove("ok","syncing","err","offline");
+  if (status === SyncStatus.off) { pill.classList.add("offline"); text.textContent = "Offline (no sync)"; }
+  else if (status === SyncStatus.idle) { pill.classList.add("ok"); text.textContent = "Synced" + (lastSync ? " · " + relTime(lastSync) : ""); }
+  else if (status === SyncStatus.pulling) { pill.classList.add("syncing"); text.textContent = "Pulling…"; }
+  else if (status === SyncStatus.pushing) { pill.classList.add("syncing"); text.textContent = "Saving…"; }
+  else { pill.classList.add("err"); text.textContent = "Sync error" + (msg ? " · " + msg : ""); }
+}
+
+function mergeStates(local, remote) {
+  // Per-item last-write-wins by updatedAt.
+  const out = { items: {}, custom: {}, collapsed: {}, updatedAt: new Date().toISOString() };
+  const ids = new Set([...Object.keys(local.items||{}), ...Object.keys(remote.items||{})]);
+  for (const id of ids) {
+    const l = local.items?.[id], r = remote.items?.[id];
+    if (l && r) {
+      out.items[id] = (l.updatedAt || "") > (r.updatedAt || "") ? l : r;
+    } else {
+      out.items[id] = l || r;
+    }
+  }
+  const cids = new Set([...Object.keys(local.custom||{}), ...Object.keys(remote.custom||{})]);
+  for (const id of cids) {
+    const l = local.custom?.[id], r = remote.custom?.[id];
+    if (l && r) {
+      out.custom[id] = (l.updatedAt || "") > (r.updatedAt || "") ? l : r;
+    } else {
+      out.custom[id] = l || r;
+    }
+  }
+  // collapsed: take whichever side has more recent overall updatedAt
+  out.collapsed = (local.updatedAt > (remote.updatedAt || "")) ? (local.collapsed || {}) : (remote.collapsed || {});
+  return out;
+}
+
+async function pullRemote() {
+  if (!SYNC_ENABLED) return;
+  updateSyncPill(SyncStatus.pulling);
+  try {
+    const { data, error } = await supabase.rpc("get_state", { p_sync_id: SYNC_ID });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row && row.state) {
+      const merged = mergeStates(state, row.state);
+      state = merged;
+      saveLocal(state);
+      lastSync = new Date();
+      render();
+    }
+    updateSyncPill(SyncStatus.idle);
+  } catch (e) {
+    console.error("pull failed", e);
+    updateSyncPill(SyncStatus.error, e.message || "");
+  }
+}
+
+let pushTimer = null;
+function pushDebounced() {
+  if (!SYNC_ENABLED) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushRemote, 800);
+}
+async function pushRemote() {
+  if (!SYNC_ENABLED) return;
+  updateSyncPill(SyncStatus.pushing);
+  try {
+    state.updatedAt = new Date().toISOString();
+    saveLocal(state);
+    const { error } = await supabase.rpc("set_state", { p_sync_id: SYNC_ID, p_state: state });
+    if (error) throw error;
+    lastSync = new Date();
+    updateSyncPill(SyncStatus.idle);
+  } catch (e) {
+    console.error("push failed", e);
+    updateSyncPill(SyncStatus.error, e.message || "");
+  }
+}
+
+function relTime(d) {
+  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec/60)}m ago`;
+  return `${Math.floor(sec/3600)}h ago`;
+}
+
+// ============= Helpers =============
+function allItems() {
+  return [...SEED, ...Object.values(state.custom)];
+}
+function getStatus(id) { return (state.items[id] && state.items[id].status) || "todo"; }
+function setStatus(id, status) {
+  state.items[id] = { ...(state.items[id] || {}), status, updatedAt: new Date().toISOString() };
+  saveLocal(state);
+  pushDebounced();
+  render();
+}
+function cycleStatus(id) {
+  const cur = getStatus(id);
+  const next = cur === "todo" ? "in_progress" : cur === "in_progress" ? "done" : "todo";
+  setStatus(id, next);
+}
+function fmtDuration(min) {
+  if (!min) return "";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min/60); const m = min % 60;
+  return m ? `${h}h ${m}m` : `${h} hr`;
+}
+function daysAgo(iso) {
+  if (!iso) return 999;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (24*3600*1000));
+}
+function prereqsSatisfied(item) {
+  if (!item.prereqs || !item.prereqs.length) return true;
+  return item.prereqs.every(pid => getStatus(pid) === "done" || getStatus(pid) === "skipped");
+}
+function sequencedItems() {
+  return allItems()
+    .filter(i => i.tier >= 1 && i.tier <= 5)
+    .sort((a,b) => (a.tier - b.tier) || (a.order - b.order) || a.title.localeCompare(b.title));
+}
+function upNextItems(limit = 5) {
+  return sequencedItems()
+    .filter(i => {
+      const s = getStatus(i.id);
+      if (s === "done" || s === "skipped") return false;
+      return prereqsSatisfied(i);
+    })
+    .slice(0, limit);
+}
+function ongoingItems() {
+  return allItems().filter(i => i.tier === 0).sort((a,b) => (a.order||0) - (b.order||0));
+}
+
+// ============= Views =============
+function renderUpNext() {
+  const items = upNextItems(5);
+  const cards = document.getElementById("next-cards");
+  const prog  = document.getElementById("next-progress");
+  const seq = sequencedItems();
+  const seqDone = seq.filter(i => getStatus(i.id) === "done").length;
+  const pct = seq.length ? Math.round((seqDone / seq.length) * 100) : 0;
+  const remainingMin = seq.filter(i => getStatus(i.id) !== "done" && getStatus(i.id) !== "skipped").reduce((s,i)=>s+(i.min||0),0);
+  prog.innerHTML = `
+    <div class="head">
+      <span>Path: <b>${seqDone} / ${seq.length}</b> done</span>
+      <span><b>${fmtDuration(remainingMin)}</b> remaining</span>
+    </div>
+    <div class="bar"><div style="width:${pct}%"></div></div>`;
+  if (!items.length) {
+    cards.innerHTML = `<div class="next-empty">You've completed every sequenced item. Browse Backlog or Ongoing reads.</div>`;
+    return;
+  }
+  cards.innerHTML = items.map((it, idx) => {
+    const status = getStatus(it.id);
+    return `
+      <div class="next-card ${idx === 0 ? "primary" : ""}">
+        <div class="order">${idx+1}</div>
+        <div>
+          <div class="title"><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></div>
+          <div class="meta">
+            <span>${it.source}</span><span>${fmtDuration(it.min)}</span>
+            <span>Tier ${it.tier} · ${TIER_META[it.tier].name}</span>
+          </div>
+          <div class="why">${it.why || ""}</div>
+          <div class="actions">
+            <a class="open" href="${it.url}" target="_blank" rel="noopener">Open</a>
+            ${status === "in_progress"
+              ? `<button class="done" data-action="done" data-id="${it.id}">Mark done</button>`
+              : `<button class="start" data-action="start" data-id="${it.id}">${status === "todo" ? "Start" : "Reopen"}</button>`}
+            <button class="skip" data-action="skip" data-id="${it.id}">Skip</button>
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+  cards.querySelectorAll("button[data-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id; const a = btn.dataset.action;
+      if (a === "start") setStatus(id, "in_progress");
+      else if (a === "done") setStatus(id, "done");
+      else if (a === "skip") setStatus(id, "skipped");
+    });
+  });
+}
+
+function renderPath() {
+  const root = document.getElementById("path-tiers");
+  const seq = sequencedItems();
+  const tiers = {};
+  for (const it of seq) (tiers[it.tier] = tiers[it.tier] || []).push(it);
+  let html = "";
+  for (const t of [1,2,3,4,5]) {
+    const items = tiers[t] || []; if (!items.length) continue;
+    const meta = TIER_META[t];
+    const done = items.filter(i => getStatus(i.id) === "done").length;
+    const pct = items.length ? Math.round((done/items.length)*100) : 0;
+    const userCollapse = state.collapsed[t];
+    const allDone = done === items.length;
+    const isOpen = userCollapse === undefined ? !allDone : !userCollapse;
+    html += `
+      <div class="tier ${isOpen?"open":""}" data-tier="${t}">
+        <div class="tier-head">
+          <div>
+            <div class="tier-title"><span class="tier-num">${t}</span>${meta.name}</div>
+            <div class="tier-desc">${meta.desc}</div>
+          </div>
+          <div class="tier-progress">
+            <span>${done}/${items.length}</span>
+            <div class="bar"><div style="width:${pct}%"></div></div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+        <div class="tier-body">
+          ${items.map((it, idx) => renderPathItem(it, idx+1)).join("")}
+        </div>
+      </div>`;
+  }
+  root.innerHTML = html;
+  root.querySelectorAll(".tier-head").forEach(head => {
+    head.addEventListener("click", () => {
+      const tier = head.closest(".tier"); const t = tier.dataset.tier;
+      tier.classList.toggle("open");
+      state.collapsed[t] = !tier.classList.contains("open");
+      saveLocal(state); pushDebounced();
+    });
+  });
+  root.querySelectorAll(".status-icon").forEach(el => {
+    el.addEventListener("click", e => { e.stopPropagation(); cycleStatus(el.dataset.id); });
+  });
+}
+function renderPathItem(it, step) {
+  const status = getStatus(it.id);
+  const locked = !prereqsSatisfied(it) && status !== "done";
+  const cls = ["path-item"];
+  if (status === "done") cls.push("done");
+  if (status === "in_progress") cls.push("in-progress");
+  if (locked) cls.push("locked");
+  const icon = status === "done" ? "✓" : status === "in_progress" ? "◐" : "";
+  const lockTxt = locked
+    ? `<span class="lock">requires: ${it.prereqs.map(p => {
+        const item = allItems().find(x => x.id === p);
+        return item ? item.title.split(":")[0].slice(0,28) : p;
+      }).join(", ")}</span>`
+    : "";
+  return `
+    <div class="${cls.join(" ")}">
+      <div class="step">${step}</div>
+      <div class="status-icon" data-id="${it.id}" title="Cycle: todo → in progress → done">${icon}</div>
+      <div class="title">
+        <a href="${it.url}" target="_blank" rel="noopener">${it.title}</a>
+        <div class="why">${it.why || ""} ${lockTxt}</div>
+      </div>
+      <div class="duration">${fmtDuration(it.min)}</div>
+    </div>`;
+}
+
+const elsB = {
+  list: document.getElementById("backlog-list"),
+  stats: document.getElementById("stats"),
+  search: document.getElementById("search"),
+  cat: document.getElementById("filter-cat"),
+  type: document.getElementById("filter-type"),
+  status: document.getElementById("filter-status"),
+  sort: document.getElementById("sort"),
+};
+function populateFilters() {
+  const items = allItems();
+  const cats = [...new Set(items.map(i => i.category))].sort();
+  const types = [...new Set(items.map(i => i.type))].sort();
+  elsB.cat.innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join("");
+  elsB.type.innerHTML = `<option value="">All types</option>` + types.map(t => `<option value="${t}">${t}</option>`).join("");
+}
+function filterBacklog() {
+  let items = allItems();
+  const q = elsB.search.value.trim().toLowerCase();
+  const cat = elsB.cat.value; const type = elsB.type.value; const stat = elsB.status.value;
+  if (q) items = items.filter(i => (i.title+" "+i.source+" "+(i.why||"")+" "+i.category).toLowerCase().includes(q));
+  if (cat) items = items.filter(i => i.category === cat);
+  if (type) items = items.filter(i => i.type === type);
+  if (stat === "open") items = items.filter(i => getStatus(i.id) !== "done" && getStatus(i.id) !== "skipped");
+  else if (stat === "todo") items = items.filter(i => getStatus(i.id) === "todo");
+  else if (stat === "in_progress") items = items.filter(i => getStatus(i.id) === "in_progress");
+  else if (stat === "done") items = items.filter(i => getStatus(i.id) === "done");
+  const sortBy = elsB.sort.value;
+  const prio = { high:0, med:1, low:2 };
+  items.sort((a,b) => {
+    if (sortBy === "priority") return ((prio[a.prio]||9) - (prio[b.prio]||9)) || ((a.min||9999) - (b.min||9999));
+    if (sortBy === "duration") return (a.min||9999) - (b.min||9999);
+    if (sortBy === "duration-desc") return (b.min||0) - (a.min||0);
+    if (sortBy === "title") return a.title.localeCompare(b.title);
+    if (sortBy === "recency") return (b.addedAt || "").localeCompare(a.addedAt || "");
+    return 0;
+  });
+  return items;
+}
+function renderBacklog() {
+  const items = filterBacklog();
+  const all = allItems();
+  const done = all.filter(i => getStatus(i.id) === "done").length;
+  const wip = all.filter(i => getStatus(i.id) === "in_progress").length;
+  const rem = all.filter(i => getStatus(i.id) !== "done" && getStatus(i.id) !== "skipped").reduce((s,i)=>s+(i.min||0),0);
+  elsB.stats.innerHTML = `
+    <span class="stat"><b>${all.length}</b> items</span>
+    <span class="stat"><b>${done}</b> done</span>
+    <span class="stat"><b>${wip}</b> in progress</span>
+    <span class="stat"><b>${fmtDuration(rem)}</b> remaining</span>`;
+  const grouped = {};
+  for (const it of items) (grouped[it.category] = grouped[it.category] || []).push(it);
+  if (!Object.keys(grouped).length) {
+    elsB.list.innerHTML = `<div class="empty">No items match your filters.</div>`;
+    return;
+  }
+  let html = "";
+  for (const cat of Object.keys(grouped)) {
+    html += `<div class="group-header">${cat}</div>`;
+    for (const it of grouped[cat]) {
+      const status = getStatus(it.id);
+      const isNew = daysAgo(it.addedAt) <= 7;
+      html += `
+        <div class="row ${status === "done" ? "done" : ""}">
+          <div>
+            <div class="title"><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></div>
+            <div class="meta">
+              <span>${it.source}</span>
+              <span class="tag type-${it.type}">${it.type}</span>
+              <span class="tag prio-${it.prio}">${it.prio}</span>
+              ${it.tier >=1 && it.tier <=5 ? `<span class="tag">T${it.tier}</span>` : ""}
+              ${isNew ? `<span class="tag new">new</span>` : ""}
+            </div>
+            <div class="why">${it.why || ""}</div>
+          </div>
+          <div class="row-right">
+            <span class="duration">${fmtDuration(it.min)}</span>
+            <select class="status" data-id="${it.id}">
+              <option value="todo" ${status==="todo"?"selected":""}>Not started</option>
+              <option value="in_progress" ${status==="in_progress"?"selected":""}>In progress</option>
+              <option value="done" ${status==="done"?"selected":""}>Done</option>
+              <option value="skipped" ${status==="skipped"?"selected":""}>Skip</option>
+            </select>
+          </div>
+        </div>`;
+    }
+  }
+  elsB.list.innerHTML = html;
+  elsB.list.querySelectorAll("select.status").forEach(s => {
+    s.addEventListener("change", e => setStatus(e.target.dataset.id, e.target.value));
+  });
+}
+function renderOngoing() {
+  const root = document.getElementById("ongoing-list");
+  const items = ongoingItems();
+  const grouped = {};
+  for (const it of items) (grouped[it.category] = grouped[it.category] || []).push(it);
+  let html = "";
+  for (const cat of Object.keys(grouped)) {
+    html += `<div class="group-header">${cat}</div>`;
+    for (const it of grouped[cat]) {
+      html += `
+        <div class="row">
+          <div>
+            <div class="title"><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></div>
+            <div class="meta">
+              <span>${it.source}</span>
+              <span class="tag type-${it.type}">${it.type}</span>
+            </div>
+            <div class="why">${it.why || ""}</div>
+          </div>
+          <div class="row-right"><span class="duration">${fmtDuration(it.min)} / visit</span></div>
+        </div>`;
+    }
+  }
+  root.innerHTML = html;
+}
+function updateCounts() {
+  document.getElementById("count-next").textContent = upNextItems(99).length;
+  document.getElementById("count-path").textContent = sequencedItems().length;
+  document.getElementById("count-backlog").textContent = allItems().length;
+  document.getElementById("count-ongoing").textContent = ongoingItems().length;
+  const last = CHANGELOG[CHANGELOG.length - 1];
+  if (last) document.getElementById("sub").textContent = `Curated path. Last update ${last.date}.`;
+}
+
+function render() {
+  renderUpNext(); renderPath(); renderBacklog(); renderOngoing(); updateCounts();
+}
+
+// ============= Tabs + UI =============
+document.getElementById("tabs").addEventListener("click", e => {
+  const tab = e.target.closest(".tab"); if (!tab) return;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  tab.classList.add("active");
+  document.getElementById("view-" + tab.dataset.view).classList.add("active");
+});
+["search","filter-cat","filter-type","filter-status","sort"].forEach(id => {
+  document.getElementById(id).addEventListener(id === "search" ? "input" : "change", renderBacklog);
+});
+
+document.getElementById("add-btn").addEventListener("click", () => {
+  const title = prompt("Title?"); if (!title) return;
+  const url = prompt("URL?") || "";
+  const source = prompt("Source / author?") || "Custom";
+  const type = prompt("Type (Article / Video / Podcast / Tutorial / Course / Repo / Newsletter)", "Article") || "Article";
+  const cat = prompt("Category?", "Agentic Engineering") || "Custom";
+  const tier = parseInt(prompt("Tier? 1-5 path, 0 ongoing", "0")) || 0;
+  const min = parseInt(prompt("Minutes?", "30")) || 0;
+  const prio = prompt("Priority? high/med/low", "med") || "med";
+  const why = prompt("Why does it matter?") || "";
+  const id = "custom-" + Date.now();
+  state.custom[id] = { id, title, url, source, type, category: cat, tier, order: 9999, prereqs:[], min, prio, why,
+    addedAt: new Date().toISOString().slice(0,10), updatedAt: new Date().toISOString() };
+  state.items[id] = { status: "todo", updatedAt: new Date().toISOString() };
+  saveLocal(state); pushDebounced();
+  populateFilters(); render();
+});
+
+// Settings modal
+const modal = document.getElementById("modal-backdrop");
+function openModal() {
+  document.getElementById("sync-id-display").textContent = SYNC_ID;
+  const ls = document.getElementById("last-sync-text");
+  if (!SYNC_ENABLED) ls.textContent = "Sync disabled (no Supabase config baked into this build)";
+  else ls.textContent = lastSync ? `Last sync ${relTime(lastSync)}` : "Not synced yet";
+  modal.classList.add("open");
+}
+document.getElementById("settings-btn").addEventListener("click", openModal);
+document.getElementById("close-modal").addEventListener("click", () => modal.classList.remove("open"));
+modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); });
+
+document.getElementById("copy-sync").addEventListener("click", () => {
+  navigator.clipboard?.writeText(SYNC_ID);
+  const b = document.getElementById("copy-sync");
+  b.textContent = "Copied!"; setTimeout(() => b.textContent = "Copy", 1200);
+});
+document.getElementById("pair-btn").addEventListener("click", async () => {
+  const v = document.getElementById("pair-input").value.trim().toLowerCase();
+  if (!v || v.length < 8) { alert("That doesn't look like a sync code."); return; }
+  if (!confirm(`Pair with sync code "${v}"? Your current state will merge with that device's state.`)) return;
+  localStorage.setItem("sync_id", v);
+  location.reload();
+});
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `learning-backlog-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+});
+document.getElementById("import-btn").addEventListener("click", () => {
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/json";
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const txt = await f.text();
+    try {
+      const imp = JSON.parse(txt);
+      if (!imp.items) throw new Error("Missing items");
+      state = mergeStates(state, imp);
+      saveLocal(state); pushDebounced(); render();
+      alert("Imported.");
+    } catch (e) { alert("Import failed: " + e.message); }
+  };
+  inp.click();
+});
+document.getElementById("reset-btn").addEventListener("click", () => {
+  if (!confirm("Clear all your progress, custom items, and tier-collapse state on this device?")) return;
+  state = { items:{}, custom:{}, collapsed:{}, updatedAt: new Date(0).toISOString() };
+  saveLocal(state); pushDebounced(); render();
+});
+
+// PWA: register service worker + install prompt
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(e => console.warn("SW failed", e));
+}
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault(); deferredPrompt = e;
+  if (!localStorage.getItem("install_dismissed")) document.getElementById("install-banner").classList.add("show");
+});
+document.getElementById("install-accept").addEventListener("click", async () => {
+  if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
+  document.getElementById("install-banner").classList.remove("show");
+});
+document.getElementById("install-dismiss").addEventListener("click", () => {
+  localStorage.setItem("install_dismissed", "1");
+  document.getElementById("install-banner").classList.remove("show");
+});
+
+// ============= Boot =============
+populateFilters(); render();
+if (SYNC_ENABLED) {
+  updateSyncPill(SyncStatus.idle);
+  pullRemote();                                       // initial pull
+  setInterval(pullRemote, 30_000);                    // poll every 30s for cross-device updates
+  window.addEventListener("focus", pullRemote);       // also when tab refocuses
+} else {
+  updateSyncPill(SyncStatus.off);
+}
+</script>
+</body>
+</html>
