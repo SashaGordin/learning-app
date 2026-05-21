@@ -18,7 +18,6 @@ export async function ask(prompt, opts = {}) {
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: opts.maxTokens ?? 4096,
-    temperature: opts.temperature ?? 0.4,
     system: opts.system,
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: opts.maxSearches ?? 10 }],
     messages: [{ role: "user", content: prompt }],
