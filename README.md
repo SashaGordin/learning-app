@@ -65,21 +65,18 @@ The phone version is hosted on Cloudflare Pages — free, real HTTPS, installabl
 
 ### 1. First-time Cloudflare Pages setup
 
-```bash
-# In learning-app/ — installs wrangler and prompts an OAuth login the first time.
-./deploy.sh
-```
+In the Cloudflare dashboard → Workers & Pages → Create → Pages → **Connect to Git** → pick the `learning-app` repo. In build settings:
 
-`deploy.sh` will:
-1. Copy `frontend/` to a temp build dir.
-2. Substitute your `SUPABASE_URL` and `SUPABASE_ANON_KEY` into the `<meta>` tags.
-3. Run `npx wrangler pages deploy …` which uploads the build.
+- **Framework preset:** None
+- **Build command:** (leave empty)
+- **Build output directory:** `frontend`
+- **Root directory:** `/`
 
-First run will prompt:
-- Browser opens for Cloudflare OAuth — approve.
-- Wrangler asks to create the project — say yes, accept the default name `learning-backlog`.
+Save and deploy. Cloudflare gives you a URL like `https://learning-app-3w5.pages.dev`. Every `git push` to `main` triggers a fresh deploy automatically.
 
-You'll get a URL like `https://learning-backlog.pages.dev`.
+The Supabase URL and anon publishable key are committed in `frontend/index.html`'s `<meta>` tags, so no environment variables are needed in Cloudflare. (The anon key is publishable by design — RLS + `SECURITY DEFINER` RPCs gate actual access.)
+
+The legacy `./deploy.sh` script still works for one-off manual deploys via `wrangler` if you ever want to bypass GitHub, but the GitHub integration is the primary path.
 
 ### 2. Install on iOS (Safari)
 
@@ -105,14 +102,9 @@ If you'd rather use the phone's code, do the reverse direction.
 
 ## How the curator updates the deployed PWA
 
-The curator container writes to `frontend/index.html` (via the mounted volume). That updates the **local** copy immediately. To push those updates to the **cloud** copy (and therefore to your phone), re-run `./deploy.sh`.
+The curator container writes to `frontend/index.html` (via the mounted volume). That updates the **local** copy immediately. To push those updates to the **cloud** copy (and therefore to your phone), commit and push the change — Cloudflare Pages auto-deploys on push to `main`.
 
-You can wire this up to auto-deploy after each curator run by adding two lines at the end of `cron/curator.js`:
-
-```js
-import { execSync } from "node:child_process";
-execSync("/usr/local/bin/deploy.sh", { stdio: "inherit" });
-```
+You can wire this up to auto-commit/push after each curator run by appending a `git` step to `cron/curator.js`, but you'd need to mount a credential into the cron container. Easier: review the curator's email summary and `git add frontend/index.html && git commit && git push` from the host when you like the changes.
 
 …and mounting `deploy.sh` into the cron container in `docker-compose.yml`. Skipped here to keep the v1 simple; deploy by hand after curator runs (the curator emails you a summary, so you'll know when there's something to deploy).
 
@@ -145,7 +137,7 @@ docker compose down
 docker compose up -d --build
 
 # Redeploy the PWA after a curator run or HTML edit
-./deploy.sh
+git add frontend/index.html && git commit -m "Curator update" && git push
 ```
 
 ## File map
@@ -170,7 +162,7 @@ learning-app/
 │       └── email.js        Resend wrapper with Markdown → HTML
 ├── Caddyfile               Static server config for the local copy
 ├── docker-compose.yml
-├── deploy.sh               Builds + deploys to Cloudflare Pages
+├── deploy.sh               Legacy manual wrangler deploy (GitHub auto-deploy supersedes)
 ├── .env.example
 └── README.md
 ```
@@ -185,7 +177,7 @@ learning-app/
 ## Troubleshooting
 
 **The PWA loads but the sync pill says "Sync disabled"**
-Your build doesn't have Supabase config baked in. Re-run `./deploy.sh` (or for the local copy, edit `frontend/index.html`'s `<meta name="supabase-url">` and `<meta name="supabase-anon-key">` tags directly, then `docker compose restart caddy`).
+The `<meta name="supabase-url">` and `<meta name="supabase-anon-key">` tags at the top of `frontend/index.html` are empty. The committed values should be present — if they got wiped, restore them from `.env.example`.
 
 **Briefs aren't arriving**
 ```bash
