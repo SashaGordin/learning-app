@@ -2,6 +2,7 @@
 
 import { ask } from "./lib/claude.js";
 import { sendEmail } from "./lib/email.js";
+import { recentDones, formatPersonalization } from "./lib/state.js";
 
 const today = new Date();
 const sun = new Date(today);
@@ -11,10 +12,17 @@ const yr = today.getFullYear();
 const range = `${fmt(mon)} – ${fmt(sun)}, ${yr}`;
 const isoDate = today.toISOString().slice(0,10);
 
+// Use a slightly bigger window than the daily — the weekly synthesis benefits
+// from seeing what Sasha learned over the past couple of weeks, not just days.
+const dones = await recentDones(12);
+const personalization = formatPersonalization(dones);
+if (dones.length) console.log(`[weekly_brief] personalizing with ${dones.length} recent done items`);
+
 const PROMPT = `You are producing Sasha's WEEKLY deep brief on AI/agentic engineering. Sasha is a developer who gets a 5-minute daily brief; this is the longer Monday-morning commute read. Target ~15-20 minutes of reading (1500-2500 words).
 
 Sasha is interested in: agentic engineering, building agents, Claude Code best practices, MCP, coding agents (Cursor, Aider, Cline, Codex CLI, OpenCode, "Pi"), open-source models (Hermes / Nous Research, Llama, Qwen), and LLM updates from Anthropic, OpenAI, Google, Meta. Sasha wants to be told what to PAY ATTENTION TO — not just a recap.
 
+${personalization}
 TASK
 Cover the past 7 days (${range}). Run 8-12 web searches across:
 - Claude Code / Anthropic releases and engineering posts

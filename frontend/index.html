@@ -129,7 +129,11 @@
     align-items: center; padding: 9px 8px; border-radius: 8px; margin: 1px 0;
   }
   .path-item:hover { background: #f9fafb; }
-  .path-item.done { opacity: 0.5; }
+  /* Done items dim via color (not opacity) so completed-item notes stay vivid */
+  .path-item.done .title a { color: #9ca3af; font-weight: 500; }
+  .path-item.done .title .why { color: #d1d5db; }
+  .path-item.done .step,
+  .path-item.done .duration { color: #d1d5db; }
   .path-item.locked { opacity: 0.55; }
   .path-item .step { color: #9ca3af; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
   .path-item .status-icon {
@@ -163,7 +167,10 @@
     padding: 12px 14px; margin-bottom: 8px;
     display: grid; grid-template-columns: 1fr auto; gap: 10px 14px; align-items: start;
   }
-  .row.done { opacity: 0.55; }
+  /* Same color-based dim treatment for backlog rows */
+  .row.done .title a { color: #9ca3af; }
+  .row.done .why { color: #d1d5db; }
+  .row.done .meta { color: #d1d5db; }
   .row .title a { color: #111827; font-weight: 600; text-decoration: none; }
   .row .meta { color: #6b7280; font-size: 12px; margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .row .meta .tag { background: #f3f4f6; padding: 1.5px 7px; border-radius: 999px; font-size: 11.5px; color: #374151; }
@@ -254,6 +261,46 @@
     background: #f59e0b; border-color: #f59e0b; color: #111827; font-weight: 600;
   }
 
+  /* Done-modal (Phase 1.2): captures one-sentence takeaway + optional rating */
+  .done-modal .note-input {
+    width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px;
+    font: inherit; font-size: 13.5px; resize: vertical; min-height: 80px;
+    background: white; color: #111827;
+  }
+  .done-modal .note-input:focus { outline: 2px solid #fde9c5; border-color: #f59e0b; }
+  .rating-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+  .rating-stars { display: flex; gap: 3px; }
+  .rating-stars .star {
+    font-size: 24px; color: #e5e7eb; cursor: pointer; user-select: none; line-height: 1;
+    transition: color .1s, transform .1s;
+  }
+  .rating-stars .star:hover { transform: scale(1.15); }
+  .rating-stars .star.filled { color: #f59e0b; }
+  .rating-label { font-size: 12px; color: #6b7280; }
+  .rating-clear {
+    margin-left: auto; font-size: 11.5px; color: #6b7280; background: none; border: none;
+    cursor: pointer; padding: 4px 6px;
+  }
+  .rating-clear:hover { color: #111827; text-decoration: underline; }
+  .done-modal .modal-actions .save {
+    background: #111827; color: white; border-color: #111827; flex: 1.4;
+  }
+  .done-modal .modal-actions .save:hover { background: #1f2937; }
+  .done-modal .modal-actions .skip-note { color: #6b7280; }
+
+  /* Inline takeaway shown on completed items */
+  .done-note {
+    margin-top: 5px; font-size: 12.5px; color: #374151;
+    background: #fefce8; border-left: 3px solid #f59e0b;
+    padding: 5px 9px; border-radius: 0 6px 6px 0; line-height: 1.45;
+  }
+  .done-note-tag {
+    font-size: 10.5px; color: #92400e; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-right: 6px;
+  }
+  .done-note .rating-inline {
+    color: #f59e0b; margin-left: 6px; letter-spacing: 1px; font-size: 11.5px;
+  }
   @media (max-width: 600px) {
     .wrap { padding: 14px 12px 90px; }
     h1 { font-size: 20px; }
@@ -348,6 +395,37 @@
     <div class="modal-actions">
       <button id="reset-btn" class="danger">Reset all progress</button>
       <button id="close-modal" class="close">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mark-done modal (Phase 1.2): captures takeaway + rating before committing -->
+<div class="modal-backdrop" id="done-modal-backdrop">
+  <div class="modal done-modal">
+    <h2 id="done-modal-title">Mark done</h2>
+    <div class="desc">One sentence now is worth more than re-watching later. Skip the note only if you really need to.</div>
+
+    <h3>What did you get out of this?</h3>
+    <textarea id="done-note" class="note-input" rows="3"
+      placeholder="One sentence. The single thing you actually want to remember."></textarea>
+
+    <h3>How useful was it?</h3>
+    <div class="rating-row">
+      <div class="rating-stars" id="rating-stars">
+        <span class="star" data-n="1">★</span>
+        <span class="star" data-n="2">★</span>
+        <span class="star" data-n="3">★</span>
+        <span class="star" data-n="4">★</span>
+        <span class="star" data-n="5">★</span>
+      </div>
+      <span id="rating-label" class="rating-label">no rating</span>
+      <button id="rating-clear" class="rating-clear" type="button">clear</button>
+    </div>
+
+    <div class="modal-actions">
+      <button id="done-cancel">Cancel</button>
+      <button id="done-skip-note" class="skip-note">Skip note</button>
+      <button id="done-save" class="save">Save &amp; mark done</button>
     </div>
   </div>
 </div>
@@ -653,7 +731,11 @@ function allItems() {
   return [...SEED, ...Object.values(state.custom)];
 }
 function getStatus(id) { return (state.items[id] && state.items[id].status) || "todo"; }
+function getItemMeta(id) { return state.items[id] || {}; }
 function setStatus(id, status) {
+  // Direct status set — used by skipped / in_progress / todo transitions
+  // and by the done-modal commit. Done transitions from the UI route through
+  // requestDone() so we can capture a note + rating first.
   state.items[id] = { ...(state.items[id] || {}), status, updatedAt: new Date().toISOString() };
   saveLocal(state);
   pushDebounced();
@@ -662,7 +744,78 @@ function setStatus(id, status) {
 function cycleStatus(id) {
   const cur = getStatus(id);
   const next = cur === "todo" ? "in_progress" : cur === "in_progress" ? "done" : "todo";
+  if (next === "done") { requestDone(id); return; }
   setStatus(id, next);
+}
+
+// ---- Mark-done modal (Phase 1.2) ----------------------------------------
+// Single chokepoint for "going to done" so we always capture takeaway + rating
+// + completedAt + nextReviewAt (initial = +7d, adjusted later by memory.js).
+let doneTarget = null;
+let currentRating = 0;
+
+function requestDone(id) {
+  doneTarget = id;
+  const item = allItems().find(x => x.id === id);
+  const meta = getItemMeta(id);
+  document.getElementById("done-modal-title").textContent =
+    item ? `Mark done: ${item.title}` : "Mark done";
+  document.getElementById("done-note").value = meta.note || "";
+  setRating(meta.rating || 0);
+  document.getElementById("done-modal-backdrop").classList.add("open");
+  setTimeout(() => document.getElementById("done-note").focus(), 60);
+}
+
+function closeDoneModal() {
+  doneTarget = null;
+  document.getElementById("done-modal-backdrop").classList.remove("open");
+}
+
+function setRating(n) {
+  currentRating = n;
+  document.querySelectorAll("#rating-stars .star").forEach((el, i) => {
+    el.classList.toggle("filled", i < n);
+  });
+  document.getElementById("rating-label").textContent = n ? `${n} / 5` : "no rating";
+}
+
+function commitDone(saveForm) {
+  // saveForm = true: commit exactly what's in the form (empty textarea wipes
+  //                 the existing note; cleared rating wipes the existing rating).
+  // saveForm = false: "Skip note" — preserve prev.note/rating untouched, just
+  //                  flip status to done.
+  if (!doneTarget) return;
+  const id = doneTarget;
+  const now = new Date();
+  // Initial review interval: 7 days. memory.js will bump on "remembered" /
+  // halve on "fuzzy" / reset on "forgot" once Phase 2 lands.
+  const nextReview = new Date(now);
+  nextReview.setDate(now.getDate() + 7);
+
+  const prev = state.items[id] || {};
+  const next = {
+    ...prev,
+    status: "done",
+    completedAt: prev.completedAt || now.toISOString(),
+    nextReviewAt: prev.nextReviewAt || nextReview.toISOString().slice(0, 10),
+    lastReviewedAt: prev.lastReviewedAt || null,
+    updatedAt: now.toISOString(),
+  };
+
+  if (saveForm) {
+    const formNote = document.getElementById("done-note").value.trim();
+    const formRating = currentRating || null;
+    // Explicitly set (or delete) so an empty form actually wipes prior values.
+    if (formNote) next.note = formNote; else delete next.note;
+    if (formRating) next.rating = formRating; else delete next.rating;
+  }
+  // else: leave prev.note / prev.rating in place via the spread above.
+
+  state.items[id] = next;
+  saveLocal(state);
+  pushDebounced();
+  closeDoneModal();
+  render();
 }
 function fmtDuration(min) {
   if (!min) return "";
@@ -670,6 +823,8 @@ function fmtDuration(min) {
   const h = Math.floor(min/60); const m = min % 60;
   return m ? `${h}h ${m}m` : `${h} hr`;
 }
+const ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ESC_MAP[c]); }
 function daysAgo(iso) {
   if (!iso) return 999;
   return Math.floor((Date.now() - new Date(iso).getTime()) / (24*3600*1000));
@@ -721,18 +876,18 @@ function renderUpNext() {
       <div class="next-card ${idx === 0 ? "primary" : ""}">
         <div class="order">${idx+1}</div>
         <div>
-          <div class="title"><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></div>
+          <div class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></div>
           <div class="meta">
-            <span>${it.source}</span><span>${fmtDuration(it.min)}</span>
+            <span>${esc(it.source)}</span><span>${fmtDuration(it.min)}</span>
             <span>Tier ${it.tier} · ${TIER_META[it.tier].name}</span>
           </div>
-          <div class="why">${it.why || ""}</div>
+          <div class="why">${esc(it.why || "")}</div>
           <div class="actions">
-            <a class="open" href="${it.url}" target="_blank" rel="noopener">Open</a>
+            <a class="open" href="${esc(it.url)}" target="_blank" rel="noopener">Open</a>
             ${status === "in_progress"
-              ? `<button class="done" data-action="done" data-id="${it.id}">Mark done</button>`
-              : `<button class="start" data-action="start" data-id="${it.id}">${status === "todo" ? "Start" : "Reopen"}</button>`}
-            <button class="skip" data-action="skip" data-id="${it.id}">Skip</button>
+              ? `<button class="done" data-action="done" data-id="${esc(it.id)}">Mark done</button>`
+              : `<button class="start" data-action="start" data-id="${esc(it.id)}">${status === "todo" ? "Start" : "Reopen"}</button>`}
+            <button class="skip" data-action="skip" data-id="${esc(it.id)}">Skip</button>
           </div>
         </div>
       </div>`;
@@ -741,7 +896,7 @@ function renderUpNext() {
     btn.addEventListener("click", () => {
       const id = btn.dataset.id; const a = btn.dataset.action;
       if (a === "start") setStatus(id, "in_progress");
-      else if (a === "done") setStatus(id, "done");
+      else if (a === "done") requestDone(id);
       else if (a === "skip") setStatus(id, "skipped");
     });
   });
@@ -794,6 +949,7 @@ function renderPath() {
 }
 function renderPathItem(it, step) {
   const status = getStatus(it.id);
+  const meta = getItemMeta(it.id);
   const locked = !prereqsSatisfied(it) && status !== "done";
   const cls = ["path-item"];
   if (status === "done") cls.push("done");
@@ -803,19 +959,31 @@ function renderPathItem(it, step) {
   const lockTxt = locked
     ? `<span class="lock">requires: ${it.prereqs.map(p => {
         const item = allItems().find(x => x.id === p);
-        return item ? item.title.split(":")[0].slice(0,28) : p;
+        return esc(item ? item.title.split(":")[0].slice(0,28) : p);
       }).join(", ")}</span>`
     : "";
   return `
     <div class="${cls.join(" ")}">
       <div class="step">${step}</div>
-      <div class="status-icon" data-id="${it.id}" title="Cycle: todo → in progress → done">${icon}</div>
+      <div class="status-icon" data-id="${esc(it.id)}" title="Cycle: todo → in progress → done">${icon}</div>
       <div class="title">
-        <a href="${it.url}" target="_blank" rel="noopener">${it.title}</a>
-        <div class="why">${it.why || ""} ${lockTxt}</div>
+        <a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a>
+        <div class="why">${esc(it.why || "")} ${lockTxt}</div>
+        ${renderDoneNote(status, meta)}
       </div>
       <div class="duration">${fmtDuration(it.min)}</div>
     </div>`;
+}
+
+function renderDoneNote(status, meta) {
+  if (status !== "done" || (!meta.note && !meta.rating)) return "";
+  const rating = meta.rating
+    ? `<span class="rating-inline" title="${meta.rating}/5">${"★".repeat(meta.rating)}${"☆".repeat(5 - meta.rating)}</span>`
+    : "";
+  const note = meta.note
+    ? `<span class="done-note-tag">Took away</span>${esc(meta.note)}`
+    : `<span class="done-note-tag">Rated</span>`;
+  return `<div class="done-note">${note}${rating}</div>`;
 }
 
 const elsB = {
@@ -831,8 +999,8 @@ function populateFilters() {
   const items = allItems();
   const cats = [...new Set(items.map(i => i.category))].sort();
   const types = [...new Set(items.map(i => i.type))].sort();
-  elsB.cat.innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join("");
-  elsB.type.innerHTML = `<option value="">All types</option>` + types.map(t => `<option value="${t}">${t}</option>`).join("");
+  elsB.cat.innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  elsB.type.innerHTML = `<option value="">All types</option>` + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
 }
 function filterBacklog() {
   let items = allItems();
@@ -876,26 +1044,28 @@ function renderBacklog() {
   }
   let html = "";
   for (const cat of Object.keys(grouped)) {
-    html += `<div class="group-header">${cat}</div>`;
+    html += `<div class="group-header">${esc(cat)}</div>`;
     for (const it of grouped[cat]) {
       const status = getStatus(it.id);
       const isNew = daysAgo(it.addedAt) <= 7;
+      const meta = getItemMeta(it.id);
       html += `
         <div class="row ${status === "done" ? "done" : ""}">
           <div>
-            <div class="title"><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></div>
+            <div class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></div>
             <div class="meta">
-              <span>${it.source}</span>
-              <span class="tag type-${it.type}">${it.type}</span>
-              <span class="tag prio-${it.prio}">${it.prio}</span>
+              <span>${esc(it.source)}</span>
+              <span class="tag type-${esc(it.type)}">${esc(it.type)}</span>
+              <span class="tag prio-${esc(it.prio)}">${esc(it.prio)}</span>
               ${it.tier >=1 && it.tier <=5 ? `<span class="tag">T${it.tier}</span>` : ""}
               ${isNew ? `<span class="tag new">new</span>` : ""}
             </div>
-            <div class="why">${it.why || ""}</div>
+            <div class="why">${esc(it.why || "")}</div>
+            ${renderDoneNote(status, meta)}
           </div>
           <div class="row-right">
             <span class="duration">${fmtDuration(it.min)}</span>
-            <select class="status" data-id="${it.id}">
+            <select class="status" data-id="${esc(it.id)}">
               <option value="todo" ${status==="todo"?"selected":""}>Not started</option>
               <option value="in_progress" ${status==="in_progress"?"selected":""}>In progress</option>
               <option value="done" ${status==="done"?"selected":""}>Done</option>
@@ -907,7 +1077,18 @@ function renderBacklog() {
   }
   elsB.list.innerHTML = html;
   elsB.list.querySelectorAll("select.status").forEach(s => {
-    s.addEventListener("change", e => setStatus(e.target.dataset.id, e.target.value));
+    s.addEventListener("change", e => {
+      const id = e.target.dataset.id;
+      const val = e.target.value;
+      if (val === "done" && getStatus(id) !== "done") {
+        // Revert the select visually until the modal commits; otherwise a
+        // mid-modal Cancel would leave the dropdown reading "Done".
+        e.target.value = getStatus(id);
+        requestDone(id);
+      } else {
+        setStatus(id, val);
+      }
+    });
   });
 }
 function renderOngoing() {
@@ -917,17 +1098,17 @@ function renderOngoing() {
   for (const it of items) (grouped[it.category] = grouped[it.category] || []).push(it);
   let html = "";
   for (const cat of Object.keys(grouped)) {
-    html += `<div class="group-header">${cat}</div>`;
+    html += `<div class="group-header">${esc(cat)}</div>`;
     for (const it of grouped[cat]) {
       html += `
         <div class="row">
           <div>
-            <div class="title"><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></div>
+            <div class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></div>
             <div class="meta">
-              <span>${it.source}</span>
-              <span class="tag type-${it.type}">${it.type}</span>
+              <span>${esc(it.source)}</span>
+              <span class="tag type-${esc(it.type)}">${esc(it.type)}</span>
             </div>
-            <div class="why">${it.why || ""}</div>
+            <div class="why">${esc(it.why || "")}</div>
           </div>
           <div class="row-right"><span class="duration">${fmtDuration(it.min)} / visit</span></div>
         </div>`;
@@ -990,6 +1171,26 @@ function openModal() {
 document.getElementById("settings-btn").addEventListener("click", openModal);
 document.getElementById("close-modal").addEventListener("click", () => modal.classList.remove("open"));
 modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); });
+
+// Done modal wiring (Phase 1.2)
+const doneModal = document.getElementById("done-modal-backdrop");
+document.getElementById("done-save").addEventListener("click", () => commitDone(true));
+document.getElementById("done-skip-note").addEventListener("click", () => commitDone(false));
+document.getElementById("done-cancel").addEventListener("click", closeDoneModal);
+doneModal.addEventListener("click", e => { if (e.target === doneModal) closeDoneModal(); });
+document.getElementById("rating-stars").addEventListener("click", e => {
+  const star = e.target.closest(".star");
+  if (!star) return;
+  setRating(parseInt(star.dataset.n, 10));
+});
+document.getElementById("rating-clear").addEventListener("click", () => setRating(0));
+// Cmd/Ctrl+Enter to save, Esc to cancel — quick keyboard flow on laptop.
+document.getElementById("done-note").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitDone(true); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && doneModal.classList.contains("open")) closeDoneModal();
+});
 
 document.getElementById("copy-sync").addEventListener("click", () => {
   navigator.clipboard?.writeText(SYNC_ID);

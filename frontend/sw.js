@@ -2,7 +2,7 @@
 // Strategy: stale-while-revalidate for static shell, network-first for Supabase API.
 // Versioned cache so deploys invalidate cleanly.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `learning-backlog-${CACHE_VERSION}`;
 const SHELL = [
   "./",

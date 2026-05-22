@@ -2,13 +2,22 @@
 
 import { ask } from "./lib/claude.js";
 import { sendEmail } from "./lib/email.js";
+import { recentDones, formatPersonalization } from "./lib/state.js";
 
 const today = new Date();
 const dateStr = today.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 const isoDate = today.toISOString().slice(0,10);
 
+// Pull recent learning context so the brief can connect today's news to what
+// Sasha actually finished and noted. Best-effort: empty string if state
+// access fails, so the brief still goes out.
+const dones = await recentDones(7);
+const personalization = formatPersonalization(dones);
+if (dones.length) console.log(`[daily_brief] personalizing with ${dones.length} recent done items`);
+
 const PROMPT = `You are producing Sasha's daily AI/agentic-engineering brief. Sasha is a developer interested in: agentic engineering, building agents, Claude Code best practices, MCP, alternative coding agents (Cursor, Aider, Cline, Codex CLI, OpenCode, "Pi"), open-source models (Hermes / Nous Research, Llama, Qwen), and LLM updates from Anthropic, OpenAI, Google, Meta. They have a 1.5-2 hr daily commute and read this on commute, so favor skimmable text. Quality over coverage.
 
+${personalization}
 TASK
 Produce a focused ~5-minute-read brief covering the last 24-48 hours, dated ${dateStr}.
 
