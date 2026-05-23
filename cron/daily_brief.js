@@ -2,7 +2,7 @@
 
 import { ask } from "./lib/claude.js";
 import { sendEmail } from "./lib/email.js";
-import { recentDones, formatPersonalization } from "./lib/state.js";
+import { recentDones, formatPersonalization, loadState, getItemById } from "./lib/state.js";
 
 const today = new Date();
 const dateStr = today.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -14,6 +14,30 @@ const isoDate = today.toISOString().slice(0,10);
 const dones = await recentDones(7);
 const personalization = formatPersonalization(dones);
 if (dones.length) console.log(`[daily_brief] personalizing with ${dones.length} recent done items`);
+
+// Pull pendingMemory (written by memory.js earlier in the morning). If
+// present and generated today, render a `## Memory` section before the
+// generated brief body — that section is a static include, not Claude-
+// generated, so it shows up exactly as memory.js wrote it.
+const state = await loadState();
+let memorySection = "";
+if (state?.pendingMemory?.question && state.pendingMemory.generatedFor === isoDate) {
+  const pm = state.pendingMemory;
+  const item = await getItemById(pm.itemId, state);
+  const meta = state.items?.[pm.itemId] || {};
+  const completedDays = meta.completedAt
+    ? Math.floor((Date.now() - new Date(meta.completedAt).getTime()) / (24 * 3600 * 1000))
+    : null;
+  const titleLine = item ? `**${item.title}**${item.source ? ` · ${item.source}` : ""}` : `**${pm.itemId}**`;
+  const noteLine = meta.note ? `\n> Your note when you finished: "${meta.note}"` : "";
+  const timing = completedDays != null ? ` _(${completedDays} days ago)_` : "";
+  memorySection =
+    `## Memory\n\n` +
+    `${titleLine}${timing}${noteLine}\n\n` +
+    `**Quick recall:** ${pm.question}\n\n` +
+    `_Open the app to mark this as remembered / fuzzy / forgot — your next review date adjusts accordingly._\n\n---\n\n`;
+  console.log(`[daily_brief] including Memory section for ${pm.itemId}`);
+}
 
 const PROMPT = `You are producing Sasha's daily AI/agentic-engineering brief. Sasha is a developer interested in: agentic engineering, building agents, Claude Code best practices, MCP, alternative coding agents (Cursor, Aider, Cline, Codex CLI, OpenCode, "Pi"), open-source models (Hermes / Nous Research, Llama, Qwen), and LLM updates from Anthropic, OpenAI, Google, Meta. They have a 1.5-2 hr daily commute and read this on commute, so favor skimmable text. Quality over coverage.
 
@@ -64,8 +88,12 @@ const start = Date.now();
 const md = await ask(PROMPT, { maxTokens: 3500, maxSearches: 10 });
 console.log(`[daily_brief] generated in ${Math.round((Date.now()-start)/1000)}s, ${md.length} chars`);
 
+// Memory section goes before the brief body so it's the first thing Sasha
+// sees on the commute. It's optional; if empty it just collapses cleanly.
+const body = memorySection + md;
+
 await sendEmail({
   subject: `Daily AI Brief — ${dateStr}`,
-  markdown: md,
+  markdown: body,
 });
 console.log("[daily_brief] done");

@@ -47,7 +47,9 @@ function client() {
 
 /**
  * Returns the raw state JSON for the configured sync_id, or null if not
- * configured / network failed. Logs but never throws.
+ * configured / network failed. The returned object carries a non-enumerable
+ * `__rowUpdatedAt` property that saveState can pass back as if_unchanged_since
+ * for optimistic concurrency. Logs but never throws.
  */
 export async function loadState() {
   const syncId = process.env.LEARNING_SYNC_ID;
@@ -67,11 +69,70 @@ export async function loadState() {
       return null;
     }
     const row = Array.isArray(data) ? data[0] : data;
-    return row?.state || null;
+    if (!row?.state) return null;
+    Object.defineProperty(row.state, "__rowUpdatedAt", {
+      value: row.updated_at,
+      enumerable: false,
+      writable: false,
+    });
+    return row.state;
   } catch (e) {
     console.warn(`[state] get_state threw: ${e?.message || e}`);
     return null;
   }
+}
+
+/**
+ * Writes state back via set_state. Bumps state.updatedAt so the PWA's pull
+ * cycle picks the change up. Returns true on success, false on any failure
+ * (so callers can degrade gracefully).
+ *
+ * NOTE: passes p_if_unchanged_since to avoid clobbering concurrent writes
+ * from the PWA — if the PWA wrote between our read and write, we abort and
+ * let the next cron tick try again.
+ */
+export async function saveState(state, opts = {}) {
+  const syncId = process.env.LEARNING_SYNC_ID;
+  if (!syncId) {
+    console.warn("[state] LEARNING_SYNC_ID not set — cannot save.");
+    return false;
+  }
+  const supa = client();
+  if (!supa) {
+    console.warn("[state] no Supabase client — cannot save.");
+    return false;
+  }
+  const next = { ...state, updatedAt: new Date().toISOString() };
+  try {
+    const args = { p_sync_id: syncId, p_state: next };
+    if (opts.ifUnchangedSince) args.p_if_unchanged_since = opts.ifUnchangedSince;
+    const { data, error } = await supa.rpc("set_state", args);
+    if (error) {
+      console.warn(`[state] set_state failed: ${error.message}`);
+      return false;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row?.conflict) {
+      console.warn("[state] set_state conflict — PWA wrote concurrently; aborting this run.");
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn(`[state] set_state threw: ${e?.message || e}`);
+    return false;
+  }
+}
+
+/**
+ * Convenience: load SEED + state's `custom` map, then look up an item by id.
+ * Returns null if not found anywhere.
+ */
+export async function getItemById(id, state = null) {
+  const [seed, st] = await Promise.all([
+    loadSeed().catch(() => new Map()),
+    state ? Promise.resolve(state) : loadState(),
+  ]);
+  return seed.get(id) || st?.custom?.[id] || null;
 }
 
 /**

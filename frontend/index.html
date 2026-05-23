@@ -288,6 +288,38 @@
   .done-modal .modal-actions .save:hover { background: #1f2937; }
   .done-modal .modal-actions .skip-note { color: #6b7280; }
 
+  /* Recall banner (Phase 2): shown when state.pendingMemory is present */
+  .recall-banner {
+    background: linear-gradient(180deg, #fffbeb, #fef3c7);
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 12px 0 16px;
+    box-shadow: 0 1px 0 #fef3c7;
+  }
+  .recall-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .recall-tag {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #92400e; background: #fde68a; padding: 3px 8px; border-radius: 999px;
+  }
+  .recall-item-title { font-size: 12.5px; color: #78350f; font-weight: 500; }
+  .recall-question { font-size: 14.5px; color: #1f2937; line-height: 1.5; font-weight: 500; }
+  .recall-note { font-size: 12.5px; color: #6b7280; margin-top: 8px; font-style: italic; }
+  .recall-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .recall-btn {
+    flex: 1; min-width: 100px;
+    padding: 9px 12px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid #e5e7eb; background: white; color: #1f2937;
+    transition: background 0.1s;
+  }
+  .recall-btn:hover { background: #f9fafb; }
+  .recall-remembered { border-color: #86efac; color: #166534; }
+  .recall-remembered:hover { background: #ecfdf5; }
+  .recall-fuzzy { border-color: #fcd34d; color: #92400e; }
+  .recall-fuzzy:hover { background: #fffbeb; }
+  .recall-forgot { border-color: #fca5a5; color: #991b1b; }
+  .recall-forgot:hover { background: #fef2f2; }
+
   /* Inline takeaway shown on completed items */
   .done-note {
     margin-top: 5px; font-size: 12.5px; color: #374151;
@@ -322,6 +354,21 @@
       <button id="settings-btn" title="Sync, export, reset">Settings</button>
     </div>
   </header>
+
+  <!-- Spaced-recall banner (Phase 2). Shown when state.pendingMemory is set. -->
+  <div id="recall-banner" class="recall-banner" style="display:none">
+    <div class="recall-head">
+      <span class="recall-tag">Quick recall</span>
+      <span class="recall-item-title" id="recall-item-title"></span>
+    </div>
+    <div class="recall-question" id="recall-question"></div>
+    <div class="recall-note" id="recall-note"></div>
+    <div class="recall-actions">
+      <button class="recall-btn recall-remembered" data-outcome="remembered">Remembered</button>
+      <button class="recall-btn recall-fuzzy" data-outcome="fuzzy">Fuzzy</button>
+      <button class="recall-btn recall-forgot" data-outcome="forgot">Forgot</button>
+    </div>
+  </div>
 
   <div class="tabs" id="tabs">
     <div class="tab active" data-view="next">Up next<span class="count" id="count-next">0</span></div>
@@ -671,8 +718,14 @@ function mergeStates(local, remote) {
       out.custom[id] = l || r;
     }
   }
-  // collapsed: take whichever side has more recent overall updatedAt
-  out.collapsed = (local.updatedAt > (remote.updatedAt || "")) ? (local.collapsed || {}) : (remote.collapsed || {});
+  // collapsed and pendingMemory: take whichever side has more recent overall
+  // updatedAt. For pendingMemory this handles the race where the user
+  // dismisses (clearing local pendingMemory) and the next pull comes in with
+  // the stale remote pendingMemory — local.updatedAt > remote.updatedAt
+  // means we keep local (cleared) and the next push reconciles the server.
+  const localWins = local.updatedAt > (remote.updatedAt || "");
+  out.collapsed = localWins ? (local.collapsed || {}) : (remote.collapsed || {});
+  out.pendingMemory = localWins ? local.pendingMemory : remote.pendingMemory;
   return out;
 }
 
@@ -787,17 +840,16 @@ function commitDone(saveForm) {
   if (!doneTarget) return;
   const id = doneTarget;
   const now = new Date();
-  // Initial review interval: 7 days. memory.js will bump on "remembered" /
-  // halve on "fuzzy" / reset on "forgot" once Phase 2 lands.
-  const nextReview = new Date(now);
-  nextReview.setDate(now.getDate() + 7);
-
   const prev = state.items[id] || {};
   const next = {
     ...prev,
     status: "done",
     completedAt: prev.completedAt || now.toISOString(),
-    nextReviewAt: prev.nextReviewAt || nextReview.toISOString().slice(0, 10),
+    // Spaced-recall first-review fires at completedAt + 1 day (Ebbinghaus).
+    // memory.js progresses: 1d → 7d → 30d → 90d → 180d on "remembered",
+    // halves on "fuzzy", resets to 1d on "forgot".
+    nextReviewAt: prev.nextReviewAt || addDays(now, 1).toISOString().slice(0, 10),
+    reviewStep: prev.reviewStep ?? 0,
     lastReviewedAt: prev.lastReviewedAt || null,
     updatedAt: now.toISOString(),
   };
@@ -828,6 +880,17 @@ function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ESC_MAP[c]); }
 function daysAgo(iso) {
   if (!iso) return 999;
   return Math.floor((Date.now() - new Date(iso).getTime()) / (24*3600*1000));
+}
+function addDays(d, n) {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+}
+// Review schedule shared with cron/memory.js. Step index → next interval days.
+// 0 → first impression (1d), 1 → 7d, 2 → 30d, 3 → 90d, 4 → 180d (cap).
+const REVIEW_INTERVALS = [1, 7, 30, 90, 180];
+function nextIntervalFor(step) {
+  return REVIEW_INTERVALS[Math.min(Math.max(step, 0), REVIEW_INTERVALS.length - 1)];
 }
 function prereqsSatisfied(item) {
   if (!item.prereqs || !item.prereqs.length) return true;
@@ -1125,8 +1188,59 @@ function updateCounts() {
   if (last) document.getElementById("sub").textContent = `Curated path. Last update ${last.date}.`;
 }
 
+function renderRecallBanner() {
+  const banner = document.getElementById("recall-banner");
+  const pm = state.pendingMemory;
+  if (!pm || !pm.itemId || !pm.question) {
+    banner.style.display = "none";
+    return;
+  }
+  const item = allItems().find(x => x.id === pm.itemId);
+  const meta = state.items[pm.itemId] || {};
+  banner.style.display = "block";
+  document.getElementById("recall-item-title").textContent =
+    item ? `${item.title}${item.source ? " · " + item.source : ""}` : pm.itemId;
+  document.getElementById("recall-question").textContent = pm.question;
+  document.getElementById("recall-note").textContent = meta.note
+    ? `Your note when you finished: "${meta.note}"`
+    : "";
+}
+
+function respondToRecall(outcome) {
+  const pm = state.pendingMemory;
+  if (!pm || !pm.itemId) return;
+  const id = pm.itemId;
+  const prev = state.items[id] || {};
+  let nextStep = prev.reviewStep ?? 0;
+  let nextDays;
+  if (outcome === "remembered") {
+    nextStep = Math.min(nextStep + 1, REVIEW_INTERVALS.length - 1);
+    nextDays = nextIntervalFor(nextStep);
+  } else if (outcome === "fuzzy") {
+    // Halve current interval, min 1 day; step holds steady so we re-test soon.
+    const cur = nextIntervalFor(nextStep);
+    nextDays = Math.max(1, Math.floor(cur / 2));
+  } else { // forgot
+    nextStep = 0;
+    nextDays = 1;
+  }
+  const now = new Date();
+  state.items[id] = {
+    ...prev,
+    reviewStep: nextStep,
+    lastReviewedAt: now.toISOString(),
+    nextReviewAt: addDays(now, nextDays).toISOString().slice(0, 10),
+    updatedAt: now.toISOString(),
+  };
+  delete state.pendingMemory;
+  state.updatedAt = now.toISOString();
+  saveLocal(state);
+  pushDebounced();
+  render();
+}
+
 function render() {
-  renderUpNext(); renderPath(); renderBacklog(); renderOngoing(); updateCounts();
+  renderRecallBanner(); renderUpNext(); renderPath(); renderBacklog(); renderOngoing(); updateCounts();
 }
 
 // ============= Tabs + UI =============
@@ -1190,6 +1304,13 @@ document.getElementById("done-note").addEventListener("keydown", e => {
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && doneModal.classList.contains("open")) closeDoneModal();
+});
+
+// Recall banner buttons (Phase 2)
+document.getElementById("recall-banner").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-outcome]");
+  if (!btn) return;
+  respondToRecall(btn.dataset.outcome);
 });
 
 document.getElementById("copy-sync").addEventListener("click", () => {
