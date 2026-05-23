@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 # tzdata so cron schedules respect TZ env var
 RUN apk add --no-cache tzdata
