@@ -1,6 +1,6 @@
 // Backlog curator: edits frontend/index.html SEED block in place, emails a summary.
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rename, unlink } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ask } from "./lib/claude.js";
@@ -89,11 +89,45 @@ if (fence) jsonText = fence[1];
 let decision;
 try { decision = JSON.parse(jsonText); }
 catch (e) {
-  console.error("[curator] failed to parse JSON response:", raw.slice(0, 500));
-  throw e;
+  // Don't crash the run — log the full response and fall back to no changes so
+  // the email still goes out and the frontend isn't left in a half-state.
+  console.error("[curator] failed to parse JSON response. Full response below:");
+  console.error(raw);
+  decision = { additions: [], removals: [], note: "Curator: Claude returned non-JSON; no changes applied this week." };
 }
 
-const additions = (decision.additions || []).filter(a => a && a.id && !existingIds.has(a.id));
+// Validate additions against the SEED schema before we splice them into HTML.
+const VALID_TIERS = new Set([0, 1, 2, 3, 4, 5]);
+const VALID_TYPES = new Set(["Article", "Video", "Podcast", "Tutorial", "Course", "Repo", "Newsletter"]);
+const VALID_PRIOS = new Set(["high", "med", "low"]);
+function isValidAddition(a) {
+  if (!a || typeof a !== "object") return false;
+  if (typeof a.id !== "string" || !a.id) return false;
+  if (typeof a.title !== "string" || !a.title) return false;
+  if (typeof a.source !== "string" || !a.source) return false;
+  if (typeof a.url !== "string" || !/^https?:\/\//.test(a.url)) return false;
+  if (!VALID_TIERS.has(a.tier)) return false;
+  if (typeof a.category !== "string" || !a.category) return false;
+  if (!VALID_TYPES.has(a.type)) return false;
+  if (typeof a.min !== "number" || a.min <= 0) return false;
+  if (!VALID_PRIOS.has(a.prio)) return false;
+  if (typeof a.why !== "string" || !a.why) return false;
+  return true;
+}
+
+const rawAdditions = decision.additions || [];
+const additions = [];
+for (const a of rawAdditions) {
+  if (!isValidAddition(a)) {
+    console.warn(`[curator] skipping malformed addition: ${JSON.stringify(a)}`);
+    continue;
+  }
+  if (existingIds.has(a.id)) {
+    console.warn(`[curator] skipping duplicate id: ${a.id}`);
+    continue;
+  }
+  additions.push(a);
+}
 const removals = (decision.removals || []).filter(id => existingIds.has(id) && !id.startsWith("custom-"));
 
 console.log(`[curator] +${additions.length} -${removals.length}`);
@@ -114,13 +148,27 @@ const newChangelog = [
 ];
 const changelogJs = "const CHANGELOG = " + JSON.stringify(newChangelog, null, 2) + ";\n";
 
-const newHtml = html
-  .replace(/\/\/ SEED_START\n[\s\S]*?\/\/ SEED_END/,
-           `// SEED_START\n${seedJs}// SEED_END`)
-  .replace(/\/\/ CHANGELOG_START\n[\s\S]*?\/\/ CHANGELOG_END/,
-           `// CHANGELOG_START\n${changelogJs}// CHANGELOG_END`);
+const afterSeed = html.replace(
+  /\/\/ SEED_START\n[\s\S]*?\/\/ SEED_END/,
+  `// SEED_START\n${seedJs}// SEED_END`
+);
+if (afterSeed === html) throw new Error("SEED splice no-op — markers may have drifted in frontend/index.html");
+const newHtml = afterSeed.replace(
+  /\/\/ CHANGELOG_START\n[\s\S]*?\/\/ CHANGELOG_END/,
+  `// CHANGELOG_START\n${changelogJs}// CHANGELOG_END`
+);
+if (newHtml === afterSeed) throw new Error("CHANGELOG splice no-op — markers may have drifted in frontend/index.html");
 
-await writeFile(FRONTEND, newHtml);
+// Atomic write: write to .tmp then rename. POSIX rename is atomic, so a crash
+// mid-write can't leave the deployed file truncated.
+const TMP = FRONTEND + ".tmp";
+try {
+  await writeFile(TMP, newHtml);
+  await rename(TMP, FRONTEND);
+} catch (e) {
+  try { await unlink(TMP); } catch {}
+  throw e;
+}
 console.log("[curator] wrote frontend/index.html");
 
 // ---- Email a summary ----
