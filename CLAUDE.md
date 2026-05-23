@@ -53,6 +53,12 @@ There is no `npm test`, no `npm run lint`, no build step. Iterate by running the
 - **Adding a Supabase column or RPC** — schema is not in this repo; use the Supabase MCP tools or dashboard. After schema changes that affect sync, the frontend's `loadFromServer` / `saveToServer` logic in `index.html` (~line 600-640) is the only client.
 - **Adding a new cron job** — add a script under `cron/`, register it in `scheduler.js`, and `docker compose restart cron`. Don't add a `npm` script unless you actually need it; the container's CMD is `node scheduler.js`.
 
+## Active redesign — read PLAN.md first
+
+There is an ongoing phased redesign turning this from a frontier-news machine into a real learning system: two-stream mastery+interest model, spaced-recall, audio briefs, X-bookmark integration, build-challenge loop, dual feedback. Phases 1 and 2 are already built (Done-notes + brief personalization + spaced recall via `cron/memory.js`); Phases 3–6 are pending.
+
+**Before suggesting architectural changes or starting new work, read `PLAN.md` at the repo root.** It contains locked decisions (so they don't get re-asked), the phase-by-phase status, conventions specific to this work that aren't in this file, and a deployment cheatsheet. The TL;DR is that user preferences are committed for: split storage (mastery in JSONB, bookmarks in their own table), 1/7/30/90/180-day review cadence, async-first audio, dual feedback channels, and Claude-in-Chrome scraping for X bookmarks.
+
 ## Conventions
 
 - Node 20, ESM only (`"type": "module"` in `cron/package.json`). Use `import`, top-level await is fine.
