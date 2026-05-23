@@ -61,8 +61,8 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 5.1: New `build` item type. `cron/build_challenge.js` runs Saturday morning, picks a 60–90 min challenge matched to recent Dones, emails it. Separate `build_journal` array in state.
 - 5.2: PWA thumbs up/down per brief item → small `feedback` table keyed by brief date + item index. Resend inbound webhook → Cloudflare Worker / Supabase Edge Function → Claude parses replies → stored as feedback, fires deep-dive responses for substantive asks. Both signals inject into the next brief's prompt.
 
-**Phase 6 — X bookmarks integration. ⏳ Pending.**
-- 6.1: One-time archive import. User downloads X archive → drop `bookmarks.js` in repo → importer parses, tags via Claude, writes to interest stream via `bulk_upsert_bookmarks`.
+**Phase 6 — X bookmarks integration. ⏳ In progress.**
+- 6.1: ✅ Built and verified end-to-end (test fixture). `cron/import_bookmarks.js` parses `data/bookmarks.js` (the X archive file), normalizes each entry into the `bookmarks` row shape, tags batches of 20 via Claude (`noSearch: true`), and bulk-upserts via `bulk_upsert_bookmarks` (200 rows/batch). Idempotent: existing IDs in Supabase are skipped so `status` and `promoted_item_id` aren't clobbered on re-runs. Flags: `--file <path>`, `--dry-run`, `--no-tag`. `IMPORT_DEBUG=1` env logs raw Claude responses. Docker mount `./data:/app/data:ro` added. **Awaiting user action**: drop the X archive's `bookmarks.js` at `./data/bookmarks.js` and run `docker compose exec cron node import_bookmarks.js`.
 - 6.2: Ongoing sync via Claude in Chrome MCP. Daily scheduled task opens x.com/i/bookmarks in logged-in browser session, scrolls, extracts, dedupes against `lastBookmarkSync`. Resilient retry; manual-trigger button in PWA.
 - 6.3: New "Interest" tab in PWA showing bookmarks with original tweet text, Claude's tag, "Promote to mastery" action.
 - 6.4: Curator inspects interest stream weekly and proposes foundational items for Tier 6 that would resolve recurring themes. Daily/weekly briefs receive the last ~10 bookmarks alongside the last 7 Dones. memory.js can surface a related bookmark when reviewing a mastery item.
@@ -81,7 +81,15 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 
 2. **Phase 3a or Phase 6?** Sasha may want to pick which one excites him most next. Phase 3a (audio) is the biggest UX shift. Phase 6 (bookmarks) is the biggest personalization unlock. Either works.
 
-3. **Uncommitted file.** `cron/curator.js` carries Sasha's pre-Phase-1 work that hasn't been committed. Phase 2 work didn't touch it. If you're about to edit curator.js, read it first to understand the diff baseline.
+3. **Run the bookmark importer.** Phase 6.1 is built and verified against a test fixture. To actually populate the interest stream:
+   ```bash
+   # 1. Download your X archive from https://x.com/settings/download_your_data
+   # 2. Extract it and copy data/bookmarks.js into this repo at ./data/bookmarks.js
+   # 3. Run:
+   docker compose exec cron node import_bookmarks.js
+   # First run with --dry-run to preview, or --no-tag to skip Claude tagging (faster).
+   ```
+   The script is idempotent — safe to re-run; existing rows in Supabase are skipped so manually promoted/dismissed bookmarks aren't reset to `open`.
 
 ## Conventions and gotchas
 

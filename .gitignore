@@ -2,3 +2,7 @@
 node_modules/
 .DS_Store
 *.log
+
+# Personal one-shot import data (X archive bookmarks.js, etc.)
+data/*
+!data/.gitkeep
