@@ -61,11 +61,14 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 5.1: New `build` item type. `cron/build_challenge.js` runs Saturday morning, picks a 60–90 min challenge matched to recent Dones, emails it. Separate `build_journal` array in state.
 - 5.2: PWA thumbs up/down per brief item → small `feedback` table keyed by brief date + item index. Resend inbound webhook → Cloudflare Worker / Supabase Edge Function → Claude parses replies → stored as feedback, fires deep-dive responses for substantive asks. Both signals inject into the next brief's prompt.
 
-**Phase 6 — X bookmarks integration. ⏳ In progress.**
-- 6.1: 🟡 Built, but the archive bootstrap path is moot for X. `cron/import_bookmarks.js` works end-to-end (verified against a synthetic fixture), but X archives don't include bookmarks — verified 2026-05-24 by inspecting the actual archive. Script retained for any other JSON dump source. Docker mount `./data:/app/data:ro` is in place. Flags: `--file <path>`, `--dry-run`, `--no-tag`; `IMPORT_DEBUG=1` logs raw Claude responses. `tagBatch()` inside it is the **reusable piece** for 6.2 — same prompt shape, same string-id+positional-fallback parsing.
-- 6.2: ⏳ Next up. Bootstrap + ongoing sync via Claude in Chrome MCP. **First run** opens x.com/i/bookmarks in the logged-in browser session and deep-scrolls back as far as the UI loads (X typically lets you reach a few thousand items). **Subsequent runs** scroll only until they hit an id already in `bookmarks`, then stop. Each new bookmark is normalized into the same row shape as `import_bookmarks.js` produces, tagged via `tagBatch()` (refactor into `cron/lib/tag.js` when extracting), and bulk-upserted. Resilient retry on transient nav/timeouts. Manual-trigger button in PWA. New `state.lastBookmarkSync` field (timestamp) needs to be added to `mergeStates` in `frontend/index.html` (see the gotcha).
-- 6.3: New "Interest" tab in PWA showing bookmarks with original tweet text, Claude's tag, "Promote to mastery" action.
-- 6.4: Curator inspects interest stream weekly and proposes foundational items for Tier 6 that would resolve recurring themes. Daily/weekly briefs receive the last ~10 bookmarks alongside the last 7 Dones. memory.js can surface a related bookmark when reviewing a mastery item.
+**Phase 6 — X bookmarks integration. 🟡 6.1/6.2 done; 6.3/6.4 pending.**
+- 6.1: 🟡 Built, but the archive bootstrap path is moot for X. `cron/import_bookmarks.js` works end-to-end (verified against a synthetic fixture), but X archives don't include bookmarks — verified 2026-05-24 by inspecting the actual archive. Script retained for any other JSON dump source. Refactored 2026-05-24 onto shared `cron/lib/tag.js` (no behavior change).
+- 6.2: ✅ Built and live. **Architecture pivot from the original plan:** Claude-in-Chrome is a browser-side extension paired with a Claude.ai session — it cannot be driven from the headless cron container. So the scrape is **manual**: drive a Claude.ai session via the Chrome extension at x.com/i/bookmarks, dump bookmarks as JSON (file-download channel, not pasted into chat — Claude-in-Chrome's response filter blocks `key=value` substrings such as image URL query params and tweet bodies containing `--flag=value`), drop the file at `./data/x_bookmarks_NNN.json`, then `docker compose exec cron node sync_bookmarks.js --file …`. The cron-side script normalizes, dedupes vs the existing `bookmarks` table, tags new items via shared `tagBatch`, bulk-upserts as `source='x'`, and bumps `state.lastBookmarkSync` via `saveState` with OCC. **Scope deferred:** no `scheduler.js` entry (sync is manual), no PWA "Sync now" button (waits for 6.3 Interest tab). **Fields preserved in `content` as markers** (no schema migration): `[truncated]` when "Show more" was visible, `[link: title — desc | url]` for external link cards with a real title, `[image_url: <pbs.twimg.com URL>]` per attached image — the last of which is the hook for the next-session image-vision enrichment. Image-URL markers are stripped before tagging (waste tokens) but stay in the stored row. Verified 2026-05-24: 180 real bookmarks ingested, 77 with image markers, 44 truncated, 143/180 tagged. The `cron/lib/tag.js` `normalize()` and `tagBatch()` are the load-bearing shared pieces; do not duplicate them when 6.3/6.4 need parsing.
+- 6.3: ⏳ Pending. New "Interest" tab in PWA showing bookmarks with original tweet text, Claude's tag, "Promote to mastery" action. Also: tiny PWA "Sync now" button (deferred from 6.2 — still needs an endpoint architecture; see open question in the original 6.2 plan).
+- 6.4: ⏳ Pending. Curator inspects interest stream weekly and proposes foundational items for Tier 6 that would resolve recurring themes. Daily/weekly briefs receive the last ~10 bookmarks alongside the last 7 Dones. memory.js can surface a related bookmark when reviewing a mastery item.
+
+**Phase 6.2.5 — Image vision enrichment for X bookmarks. ⏳ Pending (next chat).**
+- Bookmarks ingested by 6.2 carry `[image_url: <pbs.twimg.com URL>]` markers in `content` for every attached image. Build a small cron-side script (`cron/enrich_bookmarks.js` or similar) that finds rows with `[image_url:` markers, calls Claude vision via the existing Anthropic SDK with the image URLs, replaces each marker with an `[image: <transcription/description>]` block following the spec from the earlier Prompt 1 (transcribe text screenshots verbatim up to ~500 chars, describe charts/diagrams/photos appropriately), and upserts. Idempotent: rerun against the same bookmarks is a no-op once markers are replaced. Run on demand, not on cron, initially. Will need an `askVision()` helper added to `cron/lib/claude.js` (image-URL inputs via Anthropic SDK's `messages.create`).
 
 ## Open items / what to do next
 
@@ -79,30 +82,39 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
    ```
    First moment of truth: does Claude generate a recall question that actually tests understanding, or does it surface-skim the title? If weak, tune the PROMPT in `cron/memory.js`.
 
-2. **Build Phase 6.2 next.** This is the active piece of work — pick it up in a new chat. See "For the next chat: starting Phase 6.2" below for everything that's already in place.
+2. **Phase 6.2.5 image-vision enrichment is the active piece of work.** See "For the next chat: starting Phase 6.2.5" below.
 
-3. **Phase 3a (audio) is queued after 6.x.** Biggest UX shift. Don't start until 6.2 + 6.3 are working so audio has bookmarks to talk about.
+3. **Phase 3a (audio) is queued after 6.x.** Biggest UX shift. Don't start until at least 6.3 is working so audio has bookmarks to talk about.
 
-## For the next chat: starting Phase 6.2
+## For the next chat: starting Phase 6.2.5 (image enrichment)
 
-Everything below is already done; you can start writing 6.2 code immediately.
+Everything in 6.2 is shipped and live. 180 real X bookmarks are in `bookmarks` (source='x'). Image enrichment is the next clean unit of work.
 
 **What's already in place:**
-- `bookmarks` table on Supabase with composite PK `(sync_id, id)`, RLS on, four SECURITY DEFINER RPCs: `get_bookmarks`, `upsert_bookmark`, `bulk_upsert_bookmarks`, `update_bookmark_status`. The `source` column accepts `'x' | 'manual' | 'browser-extension' | 'archive'` — use `'x'` for live-scrape rows. Bookmark row shape: `{ id, content, url, author?, source, tags[], why?, status, promoted_item_id?, bookmarked_at? }`.
-- `cron/import_bookmarks.js` — reusable patterns: `normalize(entry)`, `tagBatch(items)` (batches of 20, `noSearch: true`, with the "ids must be strings" prompt + positional fallback for tweet ids > 2^53), and the bulk-upsert loop in chunks of 200. Lift `tagBatch` into `cron/lib/tag.js` rather than copying.
-- `cron/lib/state.js` — `loadState()`, `saveState(state, { ifUnchangedSince })` with optimistic concurrency. Use `if_unchanged_since: state.__rowUpdatedAt` when bumping `lastBookmarkSync` so concurrent PWA writes don't get clobbered.
-- `cron/lib/claude.js` — `ask(prompt, { noSearch: true })` for cheap grounded tagging calls.
+- `cron/lib/tag.js` — shared `normalize(entry, { source })` and `tagBatch(items)`. `normalize` already folds `[image_url: <pbs.twimg.com URL>]` markers into `content` per image. `tagBatch` strips those markers before sending text to Claude for tagging (`contentForTagging` helper) so they don't waste the 400-char window.
+- `cron/sync_bookmarks.js` — the manual ingest pipeline. Idempotent. Reads `data/x_bookmarks_NNN.json` (the file-download channel from Claude-in-Chrome). Adding new bookmarks won't repeat enrichment if those rows already have `[image: ...]` blocks.
+- `cron/lib/claude.js` — `ask(prompt, { noSearch: true })` for cheap text-only Claude calls. **Does not yet support image inputs** — you'll need to add an `askVision(prompt, imageUrls, opts)` helper that calls `client.messages.create` with content blocks of `{ type: "image", source: { type: "url", url: ... } }`. Anthropic SDK supports this natively.
+- Supabase `bookmarks` table + RPCs (`get_bookmarks`, `upsert_bookmark`, `bulk_upsert_bookmarks`, `update_bookmark_status`). No schema migration needed for enrichment — replacing `[image_url:]` markers with `[image:]` blocks is just a `content` rewrite.
 
 **What you need to build:**
-- `cron/sync_bookmarks.js` — entry point. Uses Claude in Chrome MCP to open `x.com/i/bookmarks`, scroll, and extract `{ tweetId, fullText, screenName, createdAt }` for each item visible. On first run (when `state.lastBookmarkSync` is absent), deep-scroll until X stops loading more. On subsequent runs, scroll only until the first tweetId already in `bookmarks` is hit. Tag new items via `tagBatch`, bulk-upsert with `source: 'x'`, then `saveState({ ...state, lastBookmarkSync: nowIso })`.
-- `state.lastBookmarkSync` is a **new top-level field** in the JSONB state. Per the `mergeStates` gotcha in `frontend/index.html`: top-level fields use outer `updatedAt` for last-write-wins; this new field needs to be added to `mergeStates` explicitly or it'll be lost on the PWA's next pull. Search `mergeStates` in `frontend/index.html`.
-- Manual-trigger button in PWA — small button somewhere in the (eventual) Interest tab. POSTs to a tiny Worker (or runs the script via some user-side affordance — decide based on what fits the existing infra; the PWA is static).
-- Resilient retry on transient nav/timeouts (Claude in Chrome can hiccup).
-- Wire it into `cron/scheduler.js` (daily, sometime after the brief).
+- `cron/enrich_bookmarks.js` — entry point. Queries `get_bookmarks` filtered to rows containing `[image_url:` markers in `content`. For each row, parse the image URLs (one per marker line), call `askVision()` once per image (or batch a small number per call) with a prompt that follows the same content rules as the original Prompt 1 in the 6.2 chat (transcribe text screenshots verbatim ≤500 chars + `[…]`, describe charts/diagrams/photos succinctly). Replace each `[image_url: <url>]` line with the corresponding `[image: <content>]` block. Upsert via `upsert_bookmark`. Idempotent: a second run is a no-op once markers are replaced.
+- CLI flags mirroring the other scripts: `--dry-run`, `--limit N`, `--id <tweetId>` for targeted testing. Honor `IMPORT_DEBUG`.
+- Failure handling: image fetch / vision errors should emit `[image: <unreadable>]` (a sentinel that won't be retried) for that image only and continue with the rest. Never crash the loop on one bad image — `pbs.twimg.com` can 404, and that's fine.
+- Don't add to `scheduler.js` initially. Run on demand: `docker compose exec cron node enrich_bookmarks.js`.
 
-**Open question for the next chat:** the manual-trigger button needs a server endpoint to call. The existing infra is just a static PWA + a Docker-side cron container — no HTTP listener exposed. Options to discuss with Sasha: (a) add a tiny Express server in the cron container, (b) add a Cloudflare Worker that fires a webhook the cron container polls for, (c) deferred — initial version is cron-schedule-only, button comes later.
+**Open questions for the next chat:**
+- Should we normalize `pbs.twimg.com` URLs to `name=large` (better resolution for OCR) before passing to vision? The scrape captured `name=medium` for some.
+- Batching strategy: one image per vision call (simpler, more requests) vs N images per call (cheaper, but each image gets less attention from the model). Start with one-per-call.
+- Cost ceiling: 77 image-bearing rows × maybe 1.5 images avg = ~115 vision calls for batch 1. At Opus rates that's a few dollars. Sasha will likely want to confirm before running.
 
-**Required user-side setup:** Claude in Chrome MCP extension must be installed and authenticated on the host where the sync runs. Confirm with Sasha that this is in place before designing around it.
+## Phase 6.2 architecture (locked, for context)
+
+The original PLAN.md described 6.2 as a single autonomous cron job using "Claude-in-Chrome MCP" from inside the cron container. That turned out to be wrong: the Chrome extension is paired with a Claude.ai session and cannot run inside the headless `node:22-alpine` cron container. The shipped architecture is **manual scrape + cron ingest**:
+1. Sasha drives a Claude.ai session (Chrome extension active) at `x.com/i/bookmarks`. Pure-DOM extraction (no vision in this pass), chunked at 250 items/batch, output via file-download (NOT pasted into chat — Claude-in-Chrome's response filter blocks `key=value` substrings such as image URL query params and tweet bodies with `--flag=value`).
+2. Sasha drops the resulting `data/x_bookmarks_NNN.json` into the repo and runs `docker compose exec cron node sync_bookmarks.js --file /app/data/x_bookmarks_NNN.json`.
+3. The script normalizes (folds `[truncated]`, `[link: ...]`, `[image_url: ...]` markers into `content`), dedupes vs Supabase, tags the new rows via `tagBatch` (image-URL markers stripped from the tagging input), bulk-upserts as `source='x'`, and bumps `state.lastBookmarkSync` via OCC `saveState`.
+
+This sidesteps both the "headless container has no Chrome" problem and the response-filter problem in one move. PWA "Sync now" button is deferred to 6.3; scheduler entry is deferred until/unless autonomous scraping arrives.
 
 ## Conventions and gotchas
 

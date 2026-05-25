@@ -1,28 +1,49 @@
-// One-time X (Twitter) archive bookmarks importer.
+// X bookmarks live-sync ingest.
 //
-// Drop your X archive's `bookmarks.js` at `./data/bookmarks.js` in the repo
-// (mounted into the container at `/app/data/bookmarks.js`), then run:
+// The scrape itself runs out-of-band: Sasha drives a Claude.ai session with
+// the Claude-in-Chrome extension, opens x.com/i/bookmarks in the logged-in
+// browser, scrolls (deep-scroll on bootstrap, until first known id on
+// subsequent runs), and dumps a JSON array of bookmarks into
+// `./data/x_bookmarks.json` on this host.
 //
-//   docker compose exec cron node import_bookmarks.js
+// This script consumes that JSON, dedupes against existing rows, tags new
+// items with Claude, bulk-upserts as source="x", and bumps
+// `state.lastBookmarkSync`.
+//
+//   docker compose exec cron node sync_bookmarks.js
+//
+// Expected input shape — JSON array of objects, e.g.:
+//   [
+//     {
+//       "tweetId": "1700000000000000000",
+//       "fullText": "the bookmark text…",
+//       "screenName": "someone",
+//       "createdAt": "2026-05-23T14:21:00.000Z"
+//     },
+//     …
+//   ]
+// Alternate field names (id, full_text/text, screen_name/author, created_at)
+// are also accepted — see `normalize` in lib/tag.js.
 //
 // Optional flags:
 //   --file <path>   override the default file location
-//   --dry-run       parse + tag, but don't write to Supabase
+//   --dry-run       parse + tag, but don't write to Supabase or state
 //   --no-tag        skip Claude tagging (faster; raw import)
 //
-// Idempotent: bookmarks already present in Supabase (by id) are skipped so
-// the upsert can't reset a promoted/dismissed bookmark back to "open".
+// Idempotent: bookmarks already present in Supabase (by id) are skipped, and
+// the state bump is omitted when nothing new was imported.
 
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { normalize, tagBatch, TAG_BATCH } from "./lib/tag.js";
+import { loadState, saveState } from "./lib/state.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_FILE = resolve(__dirname, "..", "data", "bookmarks.js");
+const DEFAULT_FILE = resolve(__dirname, "..", "data", "x_bookmarks.json");
 
-const UPSERT_BATCH = 200;   // rows per bulk_upsert_bookmarks call
+const UPSERT_BATCH = 200;
 
 // ---- args ----------------------------------------------------------------
 const argv = process.argv.slice(2);
@@ -45,18 +66,12 @@ function supaClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-// ---- archive parsing -----------------------------------------------------
-// X archive files look like:
-//   window.YTD.bookmarks.part0 = [ { "bookmark": { "tweetId": "...", "fullText": "...", ... } }, ... ]
-// We strip the JS assignment prefix and parse the remainder as JSON.
-function parseBookmarksFile(text) {
+function parseDumpFile(text) {
   let body = text.replace(/^﻿/, "").trim();
-  body = body.replace(/^window\.YTD\.bookmarks\.part\d+\s*=\s*/, "");
-  body = body.replace(/;\s*$/, "");
   let arr;
   try { arr = JSON.parse(body); }
-  catch (e) { throw new Error(`failed to parse bookmarks file as JSON: ${e.message}`); }
-  if (!Array.isArray(arr)) throw new Error("parsed bookmarks file is not an array");
+  catch (e) { throw new Error(`failed to parse ${FILE} as JSON: ${e.message}`); }
+  if (!Array.isArray(arr)) throw new Error(`expected a JSON array in ${FILE}, got ${typeof arr}`);
   return arr;
 }
 
@@ -65,43 +80,42 @@ async function main() {
   const syncId = process.env.LEARNING_SYNC_ID;
   if (!syncId) throw new Error("LEARNING_SYNC_ID must be set");
 
-  console.log(`[import] reading ${FILE}`);
+  console.log(`[sync] reading ${FILE}`);
   let text;
   try { text = await readFile(FILE, "utf8"); }
   catch (e) {
-    if (e.code === "ENOENT") throw new Error(`bookmarks file not found at ${FILE}. Drop your X archive's bookmarks.js there and try again.`);
+    if (e.code === "ENOENT") throw new Error(`bookmarks dump not found at ${FILE}. Drop the Claude-in-Chrome JSON export there and try again.`);
     throw e;
   }
 
-  const raw = parseBookmarksFile(text);
-  console.log(`[import] parsed ${raw.length} entries from archive`);
+  const raw = parseDumpFile(text);
+  console.log(`[sync] parsed ${raw.length} entries from dump`);
 
   const normalized = [];
   const seen = new Set();
   for (const e of raw) {
-    const n = normalize(e, { source: "archive" });
+    const n = normalize(e, { source: "x" });
     if (!n) continue;
     if (seen.has(n.id)) continue; // dedupe within the file itself
     seen.add(n.id);
     normalized.push(n);
   }
-  console.log(`[import] normalized ${normalized.length} bookmarks (dropped ${raw.length - normalized.length} duplicates or missing-id entries)`);
+  console.log(`[sync] normalized ${normalized.length} bookmarks (dropped ${raw.length - normalized.length} duplicates or missing-id entries)`);
 
   const supa = supaClient();
 
-  // Fetch existing IDs so we don't clobber promoted/dismissed status on re-runs.
   const { data: existing, error: existErr } = await supa.rpc("get_bookmarks", {
     p_sync_id: syncId,
     p_limit: 100000,
   });
   if (existErr) throw new Error(`get_bookmarks failed: ${existErr.message}`);
   const existingIds = new Set((existing || []).map(b => b.id));
-  console.log(`[import] ${existingIds.size} bookmarks already in Supabase`);
+  console.log(`[sync] ${existingIds.size} bookmarks already in Supabase`);
 
   const toImport = normalized.filter(b => !existingIds.has(b.id));
-  console.log(`[import] ${toImport.length} new bookmarks to import`);
+  console.log(`[sync] ${toImport.length} new bookmarks to import`);
   if (!toImport.length) {
-    console.log("[import] nothing to do.");
+    console.log("[sync] nothing to do.");
     return;
   }
 
@@ -109,7 +123,7 @@ async function main() {
     const batches = Math.ceil(toImport.length / TAG_BATCH);
     for (let i = 0; i < toImport.length; i += TAG_BATCH) {
       const slice = toImport.slice(i, i + TAG_BATCH);
-      console.log(`[import] tagging batch ${Math.floor(i / TAG_BATCH) + 1}/${batches} (${slice.length} items)`);
+      console.log(`[sync] tagging batch ${Math.floor(i / TAG_BATCH) + 1}/${batches} (${slice.length} items)`);
       const tagMap = await tagBatch(slice);
       for (const b of slice) {
         const t = tagMap.get(b.id);
@@ -121,8 +135,8 @@ async function main() {
   }
 
   if (DRY) {
-    console.log("[import] --dry-run: skipping write.");
-    console.log("[import] sample of first 3:");
+    console.log("[sync] --dry-run: skipping write.");
+    console.log("[sync] sample of first 3:");
     console.log(JSON.stringify(toImport.slice(0, 3), null, 2));
     return;
   }
@@ -137,12 +151,25 @@ async function main() {
     });
     if (error) throw new Error(`bulk_upsert_bookmarks failed at batch ${Math.floor(i / UPSERT_BATCH) + 1}: ${error.message}`);
     total += Number(data) || slice.length;
-    console.log(`[import] upserted batch ${Math.floor(i / UPSERT_BATCH) + 1}/${batches} (running total: ${total})`);
+    console.log(`[sync] upserted batch ${Math.floor(i / UPSERT_BATCH) + 1}/${batches} (running total: ${total})`);
   }
-  console.log(`[import] done: ${total} bookmarks imported`);
+  console.log(`[sync] done: ${total} bookmarks imported`);
+
+  // Record the sync timestamp on the learning_state row. Best-effort: a lost
+  // OCC race just means the PWA wrote concurrently and will pick up
+  // lastBookmarkSync on the next round-trip.
+  const st = await loadState();
+  if (st) {
+    st.lastBookmarkSync = new Date().toISOString();
+    const ok = await saveState(st, { ifUnchangedSince: st.__rowUpdatedAt });
+    if (ok) console.log(`[sync] state.lastBookmarkSync = ${st.lastBookmarkSync}`);
+    else console.warn("[sync] state save lost the OCC race; PWA will catch up on next push");
+  } else {
+    console.warn("[sync] could not load state to record lastBookmarkSync (network or env)");
+  }
 }
 
 main().catch(e => {
-  console.error(`[import] FAILED: ${e?.message || e}`);
+  console.error(`[sync] FAILED: ${e?.message || e}`);
   process.exit(1);
 });
