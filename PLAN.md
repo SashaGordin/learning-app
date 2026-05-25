@@ -29,7 +29,7 @@ These were committed by Sasha during the planning phase. Don't surface them as o
 - **Review cadence.** Simple 1/7/30/90/180-day intervals, halve on fuzzy, reset on forgot. Not SM-2.
 - **Audio modality.** Build async first (MP3 podcast + tap-to-chat with browser SpeechRecognition). Realtime two-way voice is a possible Phase 7 if async proves the demand.
 - **Feedback channels.** Both PWA thumbs-up/down AND Resend inbound webhook for substantive replies.
-- **Bookmark sync mechanism.** Claude in Chrome scraping the logged-in X session at /i/bookmarks daily. Archive import covers the historical bootstrap. X API ($200/mo) was rejected as overkill for personal use.
+- **Bookmark sync mechanism.** Claude in Chrome scraping the logged-in X session at /i/bookmarks. **First run** does a deep-scroll bootstrap to capture as much history as the X UI will load; **subsequent runs** are incremental and dedupe against what's already in the `bookmarks` table. X archives do not include bookmarks (verified 2026-05-24), so there is no archive bootstrap path — `cron/import_bookmarks.js` is retained but unused for X; it remains usable for any other JSON dump source. X API ($200/mo) was rejected as overkill for personal use.
 
 ## Phase status
 
@@ -62,8 +62,8 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 5.2: PWA thumbs up/down per brief item → small `feedback` table keyed by brief date + item index. Resend inbound webhook → Cloudflare Worker / Supabase Edge Function → Claude parses replies → stored as feedback, fires deep-dive responses for substantive asks. Both signals inject into the next brief's prompt.
 
 **Phase 6 — X bookmarks integration. ⏳ In progress.**
-- 6.1: ✅ Built and verified end-to-end (test fixture). `cron/import_bookmarks.js` parses `data/bookmarks.js` (the X archive file), normalizes each entry into the `bookmarks` row shape, tags batches of 20 via Claude (`noSearch: true`), and bulk-upserts via `bulk_upsert_bookmarks` (200 rows/batch). Idempotent: existing IDs in Supabase are skipped so `status` and `promoted_item_id` aren't clobbered on re-runs. Flags: `--file <path>`, `--dry-run`, `--no-tag`. `IMPORT_DEBUG=1` env logs raw Claude responses. Docker mount `./data:/app/data:ro` added. **Awaiting user action**: drop the X archive's `bookmarks.js` at `./data/bookmarks.js` and run `docker compose exec cron node import_bookmarks.js`.
-- 6.2: Ongoing sync via Claude in Chrome MCP. Daily scheduled task opens x.com/i/bookmarks in logged-in browser session, scrolls, extracts, dedupes against `lastBookmarkSync`. Resilient retry; manual-trigger button in PWA.
+- 6.1: 🟡 Built, but the archive bootstrap path is moot for X. `cron/import_bookmarks.js` works end-to-end (verified against a synthetic fixture), but X archives don't include bookmarks — verified 2026-05-24 by inspecting the actual archive. Script retained for any other JSON dump source. Docker mount `./data:/app/data:ro` is in place. Flags: `--file <path>`, `--dry-run`, `--no-tag`; `IMPORT_DEBUG=1` logs raw Claude responses. `tagBatch()` inside it is the **reusable piece** for 6.2 — same prompt shape, same string-id+positional-fallback parsing.
+- 6.2: ⏳ Next up. Bootstrap + ongoing sync via Claude in Chrome MCP. **First run** opens x.com/i/bookmarks in the logged-in browser session and deep-scrolls back as far as the UI loads (X typically lets you reach a few thousand items). **Subsequent runs** scroll only until they hit an id already in `bookmarks`, then stop. Each new bookmark is normalized into the same row shape as `import_bookmarks.js` produces, tagged via `tagBatch()` (refactor into `cron/lib/tag.js` when extracting), and bulk-upserted. Resilient retry on transient nav/timeouts. Manual-trigger button in PWA. New `state.lastBookmarkSync` field (timestamp) needs to be added to `mergeStates` in `frontend/index.html` (see the gotcha).
 - 6.3: New "Interest" tab in PWA showing bookmarks with original tweet text, Claude's tag, "Promote to mastery" action.
 - 6.4: Curator inspects interest stream weekly and proposes foundational items for Tier 6 that would resolve recurring themes. Daily/weekly briefs receive the last ~10 bookmarks alongside the last 7 Dones. memory.js can surface a related bookmark when reviewing a mastery item.
 
@@ -79,17 +79,30 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
    ```
    First moment of truth: does Claude generate a recall question that actually tests understanding, or does it surface-skim the title? If weak, tune the PROMPT in `cron/memory.js`.
 
-2. **Phase 3a or Phase 6?** Sasha may want to pick which one excites him most next. Phase 3a (audio) is the biggest UX shift. Phase 6 (bookmarks) is the biggest personalization unlock. Either works.
+2. **Build Phase 6.2 next.** This is the active piece of work — pick it up in a new chat. See "For the next chat: starting Phase 6.2" below for everything that's already in place.
 
-3. **Run the bookmark importer.** Phase 6.1 is built and verified against a test fixture. To actually populate the interest stream:
-   ```bash
-   # 1. Download your X archive from https://x.com/settings/download_your_data
-   # 2. Extract it and copy data/bookmarks.js into this repo at ./data/bookmarks.js
-   # 3. Run:
-   docker compose exec cron node import_bookmarks.js
-   # First run with --dry-run to preview, or --no-tag to skip Claude tagging (faster).
-   ```
-   The script is idempotent — safe to re-run; existing rows in Supabase are skipped so manually promoted/dismissed bookmarks aren't reset to `open`.
+3. **Phase 3a (audio) is queued after 6.x.** Biggest UX shift. Don't start until 6.2 + 6.3 are working so audio has bookmarks to talk about.
+
+## For the next chat: starting Phase 6.2
+
+Everything below is already done; you can start writing 6.2 code immediately.
+
+**What's already in place:**
+- `bookmarks` table on Supabase with composite PK `(sync_id, id)`, RLS on, four SECURITY DEFINER RPCs: `get_bookmarks`, `upsert_bookmark`, `bulk_upsert_bookmarks`, `update_bookmark_status`. The `source` column accepts `'x' | 'manual' | 'browser-extension' | 'archive'` — use `'x'` for live-scrape rows. Bookmark row shape: `{ id, content, url, author?, source, tags[], why?, status, promoted_item_id?, bookmarked_at? }`.
+- `cron/import_bookmarks.js` — reusable patterns: `normalize(entry)`, `tagBatch(items)` (batches of 20, `noSearch: true`, with the "ids must be strings" prompt + positional fallback for tweet ids > 2^53), and the bulk-upsert loop in chunks of 200. Lift `tagBatch` into `cron/lib/tag.js` rather than copying.
+- `cron/lib/state.js` — `loadState()`, `saveState(state, { ifUnchangedSince })` with optimistic concurrency. Use `if_unchanged_since: state.__rowUpdatedAt` when bumping `lastBookmarkSync` so concurrent PWA writes don't get clobbered.
+- `cron/lib/claude.js` — `ask(prompt, { noSearch: true })` for cheap grounded tagging calls.
+
+**What you need to build:**
+- `cron/sync_bookmarks.js` — entry point. Uses Claude in Chrome MCP to open `x.com/i/bookmarks`, scroll, and extract `{ tweetId, fullText, screenName, createdAt }` for each item visible. On first run (when `state.lastBookmarkSync` is absent), deep-scroll until X stops loading more. On subsequent runs, scroll only until the first tweetId already in `bookmarks` is hit. Tag new items via `tagBatch`, bulk-upsert with `source: 'x'`, then `saveState({ ...state, lastBookmarkSync: nowIso })`.
+- `state.lastBookmarkSync` is a **new top-level field** in the JSONB state. Per the `mergeStates` gotcha in `frontend/index.html`: top-level fields use outer `updatedAt` for last-write-wins; this new field needs to be added to `mergeStates` explicitly or it'll be lost on the PWA's next pull. Search `mergeStates` in `frontend/index.html`.
+- Manual-trigger button in PWA — small button somewhere in the (eventual) Interest tab. POSTs to a tiny Worker (or runs the script via some user-side affordance — decide based on what fits the existing infra; the PWA is static).
+- Resilient retry on transient nav/timeouts (Claude in Chrome can hiccup).
+- Wire it into `cron/scheduler.js` (daily, sometime after the brief).
+
+**Open question for the next chat:** the manual-trigger button needs a server endpoint to call. The existing infra is just a static PWA + a Docker-side cron container — no HTTP listener exposed. Options to discuss with Sasha: (a) add a tiny Express server in the cron container, (b) add a Cloudflare Worker that fires a webhook the cron container polls for, (c) deferred — initial version is cron-schedule-only, button comes later.
+
+**Required user-side setup:** Claude in Chrome MCP extension must be installed and authenticated on the host where the sync runs. Confirm with Sasha that this is in place before designing around it.
 
 ## Conventions and gotchas
 
