@@ -60,7 +60,7 @@ Return ONLY a JSON object with this exact shape (no Markdown, no preamble):
     {
       "id": "kebab-case-slug",
       "tier": 1|2|3|4|5|0,
-      "order": 1000,
+      "order": 100,
       "prereqs": [],
       "category": "Fundamentals|Agentic Engineering|Claude Code|Coding Agents|Open Models|Daily Reads|Podcasts",
       "type": "Article|Video|Podcast|Tutorial|Course|Repo|Newsletter",
