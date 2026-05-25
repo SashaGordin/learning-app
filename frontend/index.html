@@ -489,143 +489,53 @@
 // ============= Data =============
 // SEED_START
 const SEED = [
-  { id:"karp-intro-llms", tier:1, order:10, prereqs:[], category:"Fundamentals", type:"Video",
-    title:"Intro to Large Language Models",
-    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=zjkBMFhNj_g", min:60, prio:"high",
-    why:"The canonical 1-hour mental model for LLMs. Start here.", addedAt:"2026-05-20" },
-  { id:"karp-software30", tier:1, order:20, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Video",
-    title:"Software 3.0 — LLMs as a new programming substrate",
-    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=LCEmiRjPEtQ", min:40, prio:"high",
-    why:"Mental model for the whole shift you're working inside.", addedAt:"2026-05-20" },
-  { id:"lilian-agents", tier:1, order:30, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Article",
-    title:"LLM Powered Autonomous Agents",
-    source:"Lilian Weng", url:"https://lilianweng.github.io/posts/2023-06-23-agent/", min:30, prio:"high",
-    why:"Canonical taxonomy of agent architectures (planning, memory, tools).", addedAt:"2026-05-20" },
-  { id:"karp-deep-dive-llms", tier:1, order:40, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Video",
-    title:"Deep Dive into LLMs like ChatGPT",
-    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=7xTGNNLPyMI", min:210, prio:"med",
-    why:"Optional 3.5 hr expansion — pretraining, RLHF, hallucinations. Save for a long commute.", addedAt:"2026-05-20" },
-
-  { id:"anthropic-effective-agents", tier:2, order:10, prereqs:["lilian-agents"], category:"Agentic Engineering", type:"Article",
-    title:"Building Effective Agents",
-    source:"Anthropic Engineering", url:"https://www.anthropic.com/engineering/building-effective-agents", min:25, prio:"high",
-    why:"Anthropic's guide to workflows vs agents, with concrete patterns.", addedAt:"2026-05-20" },
-  { id:"anthropic-multiagent", tier:2, order:20, prereqs:["anthropic-effective-agents"], category:"Agentic Engineering", type:"Article",
-    title:"How we built our multi-agent research system",
-    source:"Anthropic Engineering", url:"https://www.anthropic.com/engineering/multi-agent-research-system", min:25, prio:"high",
-    why:"Real production multi-agent system — orchestrator/worker patterns, what broke.", addedAt:"2026-05-20" },
-  { id:"mcp-intro", tier:2, order:30, prereqs:[], category:"Agentic Engineering", type:"Article",
-    title:"Model Context Protocol — introduction",
-    source:"modelcontextprotocol.io", url:"https://modelcontextprotocol.io/introduction", min:40, prio:"high",
-    why:"MCP is now the interop layer for every coding agent. Read before building tools.", addedAt:"2026-05-20" },
-  { id:"anthropic-cookbook", tier:2, order:40, prereqs:["anthropic-effective-agents"], category:"Agentic Engineering", type:"Repo",
-    title:"Anthropic Cookbook",
-    source:"github.com/anthropics", url:"https://github.com/anthropics/anthropic-cookbook", min:60, prio:"high",
-    why:"Working notebooks for tool use, RAG, agents, evals.", addedAt:"2026-05-20" },
-  { id:"simonw-agentic-patterns", tier:2, order:50, prereqs:["anthropic-effective-agents"], category:"Agentic Engineering", type:"Article",
-    title:"Agentic engineering patterns",
-    source:"Simon Willison", url:"https://simonwillison.net/2026/Feb/23/agentic-engineering-patterns/", min:20, prio:"med",
-    why:"Practitioner's view on what patterns are actually holding up in 2026.", addedAt:"2026-05-20" },
-
-  { id:"cc-docs", tier:3, order:10, prereqs:["mcp-intro"], category:"Claude Code", type:"Article",
-    title:"Claude Code — official documentation",
-    source:"docs.claude.com", url:"https://code.claude.com/docs/en/overview", min:60, prio:"high",
-    why:"Top-level docs. Skim everything; deep-read hooks, MCP, slash commands, sub-agents.", addedAt:"2026-05-20" },
-  { id:"cc-best-practices", tier:3, order:20, prereqs:["cc-docs"], category:"Claude Code", type:"Article",
-    title:"Claude Code: best practices for agentic coding",
-    source:"Anthropic Engineering", url:"https://www.anthropic.com/engineering/claude-code-best-practices", min:25, prio:"high",
-    why:"Anthropic's own playbook — CLAUDE.md, planning, custom tools. Re-read quarterly.", addedAt:"2026-05-20" },
-  { id:"cc-skills", tier:3, order:30, prereqs:["cc-docs"], category:"Claude Code", type:"Article",
-    title:"Claude Code Skills + Agent SDK",
-    source:"docs.claude.com", url:"https://docs.claude.com/en/docs/claude-code/skills", min:30, prio:"high",
-    why:"Skills + sub-agents. Powering Cowork itself.", addedAt:"2026-05-20" },
-  { id:"cc-hooks", tier:3, order:40, prereqs:["cc-docs"], category:"Claude Code", type:"Article",
-    title:"Hooks — lifecycle automation in Claude Code",
-    source:"docs.claude.com", url:"https://docs.claude.com/en/docs/claude-code/hooks", min:20, prio:"med",
-    why:"Pre/post hooks for formatters, gating, logging. Unlock real workflows.", addedAt:"2026-05-20" },
-  { id:"cc-agent-view", tier:3, order:50, prereqs:["cc-best-practices"], category:"Claude Code", type:"Article",
-    title:"Claude Code — what's new (Agent View, /goal, Opus 4.7)",
-    source:"code.claude.com", url:"https://code.claude.com/docs/en/whats-new", min:15, prio:"high",
-    why:"Recent release. Agent View changes how you run 5+ concurrent agents.", addedAt:"2026-05-20" },
-  { id:"cc-mcp-build", tier:3, order:60, prereqs:["mcp-intro"], category:"Claude Code", type:"Tutorial",
-    title:"Build an MCP server from scratch",
-    source:"modelcontextprotocol.io", url:"https://modelcontextprotocol.io/quickstart/server", min:60, prio:"med",
-    why:"You'll build your own connectors eventually. Quickstart is the right entry.", addedAt:"2026-05-20" },
-
-  { id:"nous-hermes", tier:4, order:10, prereqs:["anthropic-effective-agents"], category:"Open Models", type:"Article",
-    title:"Hermes Agent — Nous Research",
-    source:"nousresearch.com", url:"https://hermes-agent.nousresearch.com/", min:25, prio:"high",
-    why:"The #1 agent on OpenRouter (May 2026). The open alternative that's actually working.", addedAt:"2026-05-20" },
-  { id:"opencode", tier:4, order:20, prereqs:["cc-best-practices"], category:"Coding Agents", type:"Repo",
-    title:"OpenCode — open-source coding agent",
-    source:"github.com/opencode-ai/opencode", url:"https://github.com/opencode-ai/opencode", min:30, prio:"med",
-    why:"Open alternative to Claude Code.", addedAt:"2026-05-20" },
-  { id:"aider", tier:4, order:30, prereqs:[], category:"Coding Agents", type:"Repo",
-    title:"Aider — AI pair programming in your terminal",
-    source:"aider.chat", url:"https://aider.chat/", min:25, prio:"med",
-    why:"Older but influential. Repo-map and edit-format ideas show up everywhere.", addedAt:"2026-05-20" },
-  { id:"cursor-docs", tier:4, order:40, prereqs:["cc-best-practices"], category:"Coding Agents", type:"Article",
-    title:"Cursor: agent mode + composer fundamentals",
-    source:"cursor.com/docs", url:"https://docs.cursor.com/", min:30, prio:"med",
-    why:"Different UX bet from Claude Code. Know your competition.", addedAt:"2026-05-20" },
-  { id:"codex-cli", tier:4, order:50, prereqs:[], category:"Coding Agents", type:"Repo",
-    title:"OpenAI Codex CLI",
-    source:"github.com/openai/codex", url:"https://github.com/openai/codex", min:25, prio:"med",
-    why:"OpenAI's CLI agent. Useful comparison to Claude Code's approach.", addedAt:"2026-05-20" },
-  { id:"cline", tier:4, order:60, prereqs:[], category:"Coding Agents", type:"Repo",
-    title:"Cline — VS Code agent",
-    source:"github.com/cline/cline", url:"https://github.com/cline/cline", min:20, prio:"low",
-    why:"Popular VS Code agent extension. Different surface, similar primitives.", addedAt:"2026-05-20" },
-
-  { id:"karp-build-gpt", tier:5, order:10, prereqs:["karp-intro-llms"], category:"Fundamentals", type:"Video",
-    title:"Let's build GPT: from scratch, in code, spelled out",
-    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=kCc8FmEb1nY", min:117, prio:"high",
-    why:"Build a tiny transformer line by line. Best with a laptop on a quiet evening.", addedAt:"2026-05-20" },
-  { id:"karp-tokenizer", tier:5, order:20, prereqs:["karp-build-gpt"], category:"Fundamentals", type:"Video",
-    title:"Let's build the GPT tokenizer",
-    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=zduSFxRajkE", min:135, prio:"med",
-    why:"Why tokens matter — explains a lot of weird LLM behavior.", addedAt:"2026-05-20" },
-  { id:"karp-gpt2", tier:5, order:30, prereqs:["karp-build-gpt"], category:"Fundamentals", type:"Video",
-    title:"Let's reproduce GPT-2 (124M)",
-    source:"Andrej Karpathy", url:"https://www.youtube.com/watch?v=l8pRSuU81PU", min:240, prio:"med",
-    why:"4-hour deep build. Do after 'Let's build GPT'.", addedAt:"2026-05-20" },
-  { id:"karp-zero-hero", tier:5, order:40, prereqs:["karp-build-gpt"], category:"Fundamentals", type:"Course",
-    title:"Neural Networks: Zero to Hero (full playlist)",
-    source:"Andrej Karpathy", url:"https://karpathy.ai/zero-to-hero.html", min:900, prio:"med",
-    why:"~15 hours from backprop to GPT. Pace it across many weeks.", addedAt:"2026-05-20" },
-
-  { id:"simonw", tier:0, order:10, prereqs:[], category:"Daily Reads", type:"Newsletter",
-    title:"Simon Willison's blog", source:"simonwillison.net", url:"https://simonwillison.net/", min:15, prio:"high",
-    why:"Highest signal AI blog day-to-day. Concise, technical, well-linked.", addedAt:"2026-05-20" },
-  { id:"raschka-llm-trends", tier:0, order:20, prereqs:[], category:"Daily Reads", type:"Newsletter",
-    title:"Sebastian Raschka — Ahead of AI", source:"sebastianraschka.com", url:"https://magazine.sebastianraschka.com/", min:30, prio:"med",
-    why:"Clear, technical monthly summaries of LLM/agent research.", addedAt:"2026-05-20" },
-  { id:"karp-blog", tier:0, order:30, prereqs:[], category:"Daily Reads", type:"Article",
-    title:"Karpathy's blog", source:"karpathy.github.io", url:"https://karpathy.github.io/", min:30, prio:"med",
-    why:"Browse occasionally — 'Recipe for Training NNs', classics.", addedAt:"2026-05-20" },
-  { id:"latent-space", tier:0, order:40, prereqs:[], category:"Podcasts", type:"Podcast",
-    title:"Latent Space (Alessio Fanelli + swyx)", source:"latent.space", url:"https://www.latent.space/", min:75, prio:"high",
-    why:"Highest signal-per-minute AI eng podcast.", addedAt:"2026-05-20" },
-  { id:"dwarkesh", tier:0, order:50, prereqs:[], category:"Podcasts", type:"Podcast",
-    title:"Dwarkesh Podcast", source:"dwarkesh.com", url:"https://www.dwarkesh.com/podcast", min:120, prio:"high",
-    why:"Long-form interviews with frontier-lab people. Built for commute.", addedAt:"2026-05-20" },
-  { id:"no-priors", tier:0, order:60, prereqs:[], category:"Podcasts", type:"Podcast",
-    title:"No Priors", source:"no-priors.com", url:"https://www.no-priors.com/", min:60, prio:"med",
-    why:"Founder/exec angle. Good when you want strategy, not internals.", addedAt:"2026-05-20" },
-  { id:"hn-ai", tier:0, order:80, prereqs:[], category:"Daily Reads", type:"Newsletter",
-    title:"Hacker News — AI/agent stories (past week)", source:"news.ycombinator.com",
-    url:"https://hn.algolia.com/?dateRange=pastWeek&query=agent&sort=byPopularity&type=story", min:15, prio:"low",
-    why:"Skim weekly. Comments often more useful than the article.", addedAt:"2026-05-20" },
-  { id:"hf-trending", tier:0, order:90, prereqs:[], category:"Open Models", type:"Article",
-    title:"Hugging Face trending models", source:"huggingface.co",
-    url:"https://huggingface.co/models?sort=trending", min:10, prio:"low",
-    why:"Weekly skim. Surface new open releases before the news cycle.", addedAt:"2026-05-20" },
+  {"id":"karp-intro-llms","tier":1,"order":10,"prereqs":[],"category":"Fundamentals","type":"Video","title":"Intro to Large Language Models","source":"Andrej Karpathy","url":"https://www.youtube.com/watch?v=zjkBMFhNj_g","min":60,"prio":"high","why":"The canonical 1-hour mental model for LLMs. Start here.","addedAt":"2026-05-20"},
+  {"id":"karp-software30","tier":1,"order":20,"prereqs":["karp-intro-llms"],"category":"Fundamentals","type":"Video","title":"Software 3.0 — LLMs as a new programming substrate","source":"Andrej Karpathy","url":"https://www.youtube.com/watch?v=LCEmiRjPEtQ","min":40,"prio":"high","why":"Mental model for the whole shift you're working inside.","addedAt":"2026-05-20"},
+  {"id":"lilian-agents","tier":1,"order":30,"prereqs":["karp-intro-llms"],"category":"Fundamentals","type":"Article","title":"LLM Powered Autonomous Agents","source":"Lilian Weng","url":"https://lilianweng.github.io/posts/2023-06-23-agent/","min":30,"prio":"high","why":"Canonical taxonomy of agent architectures (planning, memory, tools).","addedAt":"2026-05-20"},
+  {"id":"karp-deep-dive-llms","tier":1,"order":40,"prereqs":["karp-intro-llms"],"category":"Fundamentals","type":"Video","title":"Deep Dive into LLMs like ChatGPT","source":"Andrej Karpathy","url":"https://www.youtube.com/watch?v=7xTGNNLPyMI","min":210,"prio":"med","why":"Optional 3.5 hr expansion — pretraining, RLHF, hallucinations. Save for a long commute.","addedAt":"2026-05-20"},
+  {"id":"anthropic-effective-agents","tier":2,"order":10,"prereqs":["lilian-agents"],"category":"Agentic Engineering","type":"Article","title":"Building Effective Agents","source":"Anthropic Engineering","url":"https://www.anthropic.com/engineering/building-effective-agents","min":25,"prio":"high","why":"Anthropic's guide to workflows vs agents, with concrete patterns.","addedAt":"2026-05-20"},
+  {"id":"anthropic-multiagent","tier":2,"order":20,"prereqs":["anthropic-effective-agents"],"category":"Agentic Engineering","type":"Article","title":"How we built our multi-agent research system","source":"Anthropic Engineering","url":"https://www.anthropic.com/engineering/multi-agent-research-system","min":25,"prio":"high","why":"Real production multi-agent system — orchestrator/worker patterns, what broke.","addedAt":"2026-05-20"},
+  {"id":"mcp-intro","tier":2,"order":30,"prereqs":[],"category":"Agentic Engineering","type":"Article","title":"Model Context Protocol — introduction","source":"modelcontextprotocol.io","url":"https://modelcontextprotocol.io/introduction","min":40,"prio":"high","why":"MCP is now the interop layer for every coding agent. Read before building tools.","addedAt":"2026-05-20"},
+  {"id":"anthropic-cookbook","tier":2,"order":40,"prereqs":["anthropic-effective-agents"],"category":"Agentic Engineering","type":"Repo","title":"Anthropic Cookbook","source":"github.com/anthropics","url":"https://github.com/anthropics/anthropic-cookbook","min":60,"prio":"high","why":"Working notebooks for tool use, RAG, agents, evals.","addedAt":"2026-05-20"},
+  {"id":"simonw-agentic-patterns","tier":2,"order":50,"prereqs":["anthropic-effective-agents"],"category":"Agentic Engineering","type":"Article","title":"Agentic engineering patterns","source":"Simon Willison","url":"https://simonwillison.net/2026/Feb/23/agentic-engineering-patterns/","min":20,"prio":"med","why":"Practitioner's view on what patterns are actually holding up in 2026.","addedAt":"2026-05-20"},
+  {"id":"cc-docs","tier":3,"order":10,"prereqs":["mcp-intro"],"category":"Claude Code","type":"Article","title":"Claude Code — official documentation","source":"docs.claude.com","url":"https://code.claude.com/docs/en/overview","min":60,"prio":"high","why":"Top-level docs. Skim everything; deep-read hooks, MCP, slash commands, sub-agents.","addedAt":"2026-05-20"},
+  {"id":"cc-best-practices","tier":3,"order":20,"prereqs":["cc-docs"],"category":"Claude Code","type":"Article","title":"Claude Code: best practices for agentic coding","source":"Anthropic Engineering","url":"https://www.anthropic.com/engineering/claude-code-best-practices","min":25,"prio":"high","why":"Anthropic's own playbook — CLAUDE.md, planning, custom tools. Re-read quarterly.","addedAt":"2026-05-20"},
+  {"id":"cc-skills","tier":3,"order":30,"prereqs":["cc-docs"],"category":"Claude Code","type":"Article","title":"Claude Code Skills + Agent SDK","source":"docs.claude.com","url":"https://docs.claude.com/en/docs/claude-code/skills","min":30,"prio":"high","why":"Skills + sub-agents. Powering Cowork itself.","addedAt":"2026-05-20"},
+  {"id":"cc-hooks","tier":3,"order":40,"prereqs":["cc-docs"],"category":"Claude Code","type":"Article","title":"Hooks — lifecycle automation in Claude Code","source":"docs.claude.com","url":"https://docs.claude.com/en/docs/claude-code/hooks","min":20,"prio":"med","why":"Pre/post hooks for formatters, gating, logging. Unlock real workflows.","addedAt":"2026-05-20"},
+  {"id":"cc-agent-view","tier":3,"order":50,"prereqs":["cc-best-practices"],"category":"Claude Code","type":"Article","title":"Claude Code — what's new (Agent View, /goal, Opus 4.7)","source":"code.claude.com","url":"https://code.claude.com/docs/en/whats-new","min":15,"prio":"high","why":"Recent release. Agent View changes how you run 5+ concurrent agents.","addedAt":"2026-05-20"},
+  {"id":"cc-mcp-build","tier":3,"order":60,"prereqs":["mcp-intro"],"category":"Claude Code","type":"Tutorial","title":"Build an MCP server from scratch","source":"modelcontextprotocol.io","url":"https://modelcontextprotocol.io/quickstart/server","min":60,"prio":"med","why":"You'll build your own connectors eventually. Quickstart is the right entry.","addedAt":"2026-05-20"},
+  {"id":"nous-hermes","tier":4,"order":10,"prereqs":["anthropic-effective-agents"],"category":"Open Models","type":"Article","title":"Hermes Agent — Nous Research","source":"nousresearch.com","url":"https://hermes-agent.nousresearch.com/","min":25,"prio":"high","why":"The #1 agent on OpenRouter (May 2026). The open alternative that's actually working.","addedAt":"2026-05-20"},
+  {"id":"opencode","tier":4,"order":20,"prereqs":["cc-best-practices"],"category":"Coding Agents","type":"Repo","title":"OpenCode — open-source coding agent","source":"github.com/opencode-ai/opencode","url":"https://github.com/opencode-ai/opencode","min":30,"prio":"med","why":"Open alternative to Claude Code.","addedAt":"2026-05-20"},
+  {"id":"aider","tier":4,"order":30,"prereqs":[],"category":"Coding Agents","type":"Repo","title":"Aider — AI pair programming in your terminal","source":"aider.chat","url":"https://aider.chat/","min":25,"prio":"med","why":"Older but influential. Repo-map and edit-format ideas show up everywhere.","addedAt":"2026-05-20"},
+  {"id":"cursor-docs","tier":4,"order":40,"prereqs":["cc-best-practices"],"category":"Coding Agents","type":"Article","title":"Cursor: agent mode + composer fundamentals","source":"cursor.com/docs","url":"https://docs.cursor.com/","min":30,"prio":"med","why":"Different UX bet from Claude Code. Know your competition.","addedAt":"2026-05-20"},
+  {"id":"codex-cli","tier":4,"order":50,"prereqs":[],"category":"Coding Agents","type":"Repo","title":"OpenAI Codex CLI","source":"github.com/openai/codex","url":"https://github.com/openai/codex","min":25,"prio":"med","why":"OpenAI's CLI agent. Useful comparison to Claude Code's approach.","addedAt":"2026-05-20"},
+  {"id":"cline","tier":4,"order":60,"prereqs":[],"category":"Coding Agents","type":"Repo","title":"Cline — VS Code agent","source":"github.com/cline/cline","url":"https://github.com/cline/cline","min":20,"prio":"low","why":"Popular VS Code agent extension. Different surface, similar primitives.","addedAt":"2026-05-20"},
+  {"id":"karp-build-gpt","tier":5,"order":10,"prereqs":["karp-intro-llms"],"category":"Fundamentals","type":"Video","title":"Let's build GPT: from scratch, in code, spelled out","source":"Andrej Karpathy","url":"https://www.youtube.com/watch?v=kCc8FmEb1nY","min":117,"prio":"high","why":"Build a tiny transformer line by line. Best with a laptop on a quiet evening.","addedAt":"2026-05-20"},
+  {"id":"karp-tokenizer","tier":5,"order":20,"prereqs":["karp-build-gpt"],"category":"Fundamentals","type":"Video","title":"Let's build the GPT tokenizer","source":"Andrej Karpathy","url":"https://www.youtube.com/watch?v=zduSFxRajkE","min":135,"prio":"med","why":"Why tokens matter — explains a lot of weird LLM behavior.","addedAt":"2026-05-20"},
+  {"id":"karp-gpt2","tier":5,"order":30,"prereqs":["karp-build-gpt"],"category":"Fundamentals","type":"Video","title":"Let's reproduce GPT-2 (124M)","source":"Andrej Karpathy","url":"https://www.youtube.com/watch?v=l8pRSuU81PU","min":240,"prio":"med","why":"4-hour deep build. Do after 'Let's build GPT'.","addedAt":"2026-05-20"},
+  {"id":"karp-zero-hero","tier":5,"order":40,"prereqs":["karp-build-gpt"],"category":"Fundamentals","type":"Course","title":"Neural Networks: Zero to Hero (full playlist)","source":"Andrej Karpathy","url":"https://karpathy.ai/zero-to-hero.html","min":900,"prio":"med","why":"~15 hours from backprop to GPT. Pace it across many weeks.","addedAt":"2026-05-20"},
+  {"id":"simonw","tier":0,"order":10,"prereqs":[],"category":"Daily Reads","type":"Newsletter","title":"Simon Willison's blog","source":"simonwillison.net","url":"https://simonwillison.net/","min":15,"prio":"high","why":"Highest signal AI blog day-to-day. Concise, technical, well-linked.","addedAt":"2026-05-20"},
+  {"id":"raschka-llm-trends","tier":0,"order":20,"prereqs":[],"category":"Daily Reads","type":"Newsletter","title":"Sebastian Raschka — Ahead of AI","source":"sebastianraschka.com","url":"https://magazine.sebastianraschka.com/","min":30,"prio":"med","why":"Clear, technical monthly summaries of LLM/agent research.","addedAt":"2026-05-20"},
+  {"id":"karp-blog","tier":0,"order":30,"prereqs":[],"category":"Daily Reads","type":"Article","title":"Karpathy's blog","source":"karpathy.github.io","url":"https://karpathy.github.io/","min":30,"prio":"med","why":"Browse occasionally — 'Recipe for Training NNs', classics.","addedAt":"2026-05-20"},
+  {"id":"latent-space","tier":0,"order":40,"prereqs":[],"category":"Podcasts","type":"Podcast","title":"Latent Space (Alessio Fanelli + swyx)","source":"latent.space","url":"https://www.latent.space/","min":75,"prio":"high","why":"Highest signal-per-minute AI eng podcast.","addedAt":"2026-05-20"},
+  {"id":"dwarkesh","tier":0,"order":50,"prereqs":[],"category":"Podcasts","type":"Podcast","title":"Dwarkesh Podcast","source":"dwarkesh.com","url":"https://www.dwarkesh.com/podcast","min":120,"prio":"high","why":"Long-form interviews with frontier-lab people. Built for commute.","addedAt":"2026-05-20"},
+  {"id":"no-priors","tier":0,"order":60,"prereqs":[],"category":"Podcasts","type":"Podcast","title":"No Priors","source":"no-priors.com","url":"https://www.no-priors.com/","min":60,"prio":"med","why":"Founder/exec angle. Good when you want strategy, not internals.","addedAt":"2026-05-20"},
+  {"id":"hn-ai","tier":0,"order":80,"prereqs":[],"category":"Daily Reads","type":"Newsletter","title":"Hacker News — AI/agent stories (past week)","source":"news.ycombinator.com","url":"https://hn.algolia.com/?dateRange=pastWeek&query=agent&sort=byPopularity&type=story","min":15,"prio":"low","why":"Skim weekly. Comments often more useful than the article.","addedAt":"2026-05-20"},
+  {"id":"hf-trending","tier":0,"order":90,"prereqs":[],"category":"Open Models","type":"Article","title":"Hugging Face trending models","source":"huggingface.co","url":"https://huggingface.co/models?sort=trending","min":10,"prio":"low","why":"Weekly skim. Surface new open releases before the news cycle.","addedAt":"2026-05-20"},
+  {"id":"mcp-2026-07-28-rc","tier":2,"order":1000,"prereqs":["mcp-intro"],"category":"Agentic Engineering","type":"Article","title":"MCP 2026-07-28 Specification Release Candidate","source":"blog.modelcontextprotocol.io","url":"https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/","min":45,"prio":"high","why":"Primary spec for the largest MCP revision since launch — stateless core, Tasks, MCP Apps, OAuth-aligned auth, and a formal deprecation policy that anyone building on MCP needs to track before the July 28 ship.","addedAt":"2026-05-25"}
 ];
 // SEED_END
 
 // CHANGELOG_START
 const CHANGELOG = [
-  { date: "2026-05-20", note: "Initial backlog — 33 items across 5 path tiers + ongoing reads." }
+  {
+    "date": "2026-05-20",
+    "note": "Initial backlog — 33 items across 5 path tiers + ongoing reads."
+  },
+  {
+    "date": "2026-05-25",
+    "note": "Added 1 item: the MCP 2026-07-28 release candidate (stateless core + Tasks + MCP Apps). Nothing else from the past 7 days cleared the bar."
+  }
 ];
 // CHANGELOG_END
 
@@ -680,6 +590,7 @@ let state = loadLocal();
 state.items = state.items || {};
 state.custom = state.custom || {};
 state.collapsed = state.collapsed || {};
+state.lastBookmarkSync = state.lastBookmarkSync || null;
 state.updatedAt = state.updatedAt || new Date(0).toISOString();
 
 // ============= Sync layer =============
@@ -726,6 +637,7 @@ function mergeStates(local, remote) {
   const localWins = local.updatedAt > (remote.updatedAt || "");
   out.collapsed = localWins ? (local.collapsed || {}) : (remote.collapsed || {});
   out.pendingMemory = localWins ? local.pendingMemory : remote.pendingMemory;
+  out.lastBookmarkSync = localWins ? local.lastBookmarkSync : remote.lastBookmarkSync;
   return out;
 }
 
