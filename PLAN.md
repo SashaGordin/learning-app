@@ -67,8 +67,16 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 6.3: ⏳ Pending. New "Interest" tab in PWA showing bookmarks with original tweet text, Claude's tag, "Promote to mastery" action. Also: tiny PWA "Sync now" button (deferred from 6.2 — still needs an endpoint architecture; see open question in the original 6.2 plan).
 - 6.4: ⏳ Pending. Curator inspects interest stream weekly and proposes foundational items for Tier 6 that would resolve recurring themes. Daily/weekly briefs receive the last ~10 bookmarks alongside the last 7 Dones. memory.js can surface a related bookmark when reviewing a mastery item.
 
-**Phase 6.2.5 — Image vision enrichment for X bookmarks. ⏳ Pending (next chat).**
-- Bookmarks ingested by 6.2 carry `[image_url: <pbs.twimg.com URL>]` markers in `content` for every attached image. Build a small cron-side script (`cron/enrich_bookmarks.js` or similar) that finds rows with `[image_url:` markers, calls Claude vision via the existing Anthropic SDK with the image URLs, replaces each marker with an `[image: <transcription/description>]` block following the spec from the earlier Prompt 1 (transcribe text screenshots verbatim up to ~500 chars, describe charts/diagrams/photos appropriately), and upserts. Idempotent: rerun against the same bookmarks is a no-op once markers are replaced. Run on demand, not on cron, initially. Will need an `askVision()` helper added to `cron/lib/claude.js` (image-URL inputs via Anthropic SDK's `messages.create`).
+**Phase 6.2.5 — Image vision enrichment for X bookmarks. ✅ Built and run.**
+- `cron/lib/claude.js` gained `askVision(prompt, imageUrls, opts)` — uses `client.messages.create` with `{ type: "image", source: { type: "url", url } }` content blocks. Defaults to `claude-sonnet-4-6` (overridable via `opts.model` or `CLAUDE_VISION_MODEL`). No web search. Logs `[claude vision]` usage in the same shape as `ask()`.
+- `cron/enrich_bookmarks.js` — on-demand script mirroring `sync_bookmarks.js` conventions. Pulls bookmarks via `get_bookmarks`, filters to rows whose `content` contains a `[image_url:` line, normalizes `pbs.twimg.com` URLs to `name=large` for better OCR, calls `askVision()` once per image, and rewrites markers in place via `upsert_bookmark`. Per-image vision/network failures degrade to `[image: <unreadable>]` and the loop continues. CLI: `--dry-run`, `--limit N`, `--id <tweetId>`. `IMPORT_DEBUG=1` for verbose logs. Idempotent — once markers are replaced the row no longer matches the filter.
+- **Locked decisions:** Sonnet 4.6 default (≈5× cheaper than Opus, plenty strong for OCR + chart/photo description). URLs normalized to `name=large` (Anthropic is dimension-agnostic on cost). One image per vision call. No interactive cost guard — `--dry-run` + `--limit` are sufficient.
+- **Payload safety:** `upsert_bookmark` replaces ALL fields on conflict, so the script forwards every existing field (including `promoted_item_id`) to avoid clobbering downstream state set by 6.3.
+- Verified 2026-05-24: 77 rows / 84 images flagged, smoke test on 1 row produced a faithful 685-char screenshot transcription. Full batch: 76/76 rows upserted, 83/83 images enriched, 0 unreadable. Re-running `--dry-run` correctly reports 0 rows needing enrichment.
+- Run again on demand after future `sync_bookmarks.js` ingests:
+  ```bash
+  docker compose exec cron node enrich_bookmarks.js
+  ```
 
 ## Open items / what to do next
 
@@ -82,30 +90,9 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
    ```
    First moment of truth: does Claude generate a recall question that actually tests understanding, or does it surface-skim the title? If weak, tune the PROMPT in `cron/memory.js`.
 
-2. **Phase 6.2.5 image-vision enrichment is the active piece of work.** See "For the next chat: starting Phase 6.2.5" below.
+2. **Phase 6.3 (Interest tab in PWA + Sync now button) is the next clean unit of work.** Bookmarks now have enriched `[image: …]` blocks so the Interest tab can render genuinely useful card bodies. The "Sync now" button still needs an endpoint architecture decision (see the open question in the original 6.2 plan).
 
 3. **Phase 3a (audio) is queued after 6.x.** Biggest UX shift. Don't start until at least 6.3 is working so audio has bookmarks to talk about.
-
-## For the next chat: starting Phase 6.2.5 (image enrichment)
-
-Everything in 6.2 is shipped and live. 180 real X bookmarks are in `bookmarks` (source='x'). Image enrichment is the next clean unit of work.
-
-**What's already in place:**
-- `cron/lib/tag.js` — shared `normalize(entry, { source })` and `tagBatch(items)`. `normalize` already folds `[image_url: <pbs.twimg.com URL>]` markers into `content` per image. `tagBatch` strips those markers before sending text to Claude for tagging (`contentForTagging` helper) so they don't waste the 400-char window.
-- `cron/sync_bookmarks.js` — the manual ingest pipeline. Idempotent. Reads `data/x_bookmarks_NNN.json` (the file-download channel from Claude-in-Chrome). Adding new bookmarks won't repeat enrichment if those rows already have `[image: ...]` blocks.
-- `cron/lib/claude.js` — `ask(prompt, { noSearch: true })` for cheap text-only Claude calls. **Does not yet support image inputs** — you'll need to add an `askVision(prompt, imageUrls, opts)` helper that calls `client.messages.create` with content blocks of `{ type: "image", source: { type: "url", url: ... } }`. Anthropic SDK supports this natively.
-- Supabase `bookmarks` table + RPCs (`get_bookmarks`, `upsert_bookmark`, `bulk_upsert_bookmarks`, `update_bookmark_status`). No schema migration needed for enrichment — replacing `[image_url:]` markers with `[image:]` blocks is just a `content` rewrite.
-
-**What you need to build:**
-- `cron/enrich_bookmarks.js` — entry point. Queries `get_bookmarks` filtered to rows containing `[image_url:` markers in `content`. For each row, parse the image URLs (one per marker line), call `askVision()` once per image (or batch a small number per call) with a prompt that follows the same content rules as the original Prompt 1 in the 6.2 chat (transcribe text screenshots verbatim ≤500 chars + `[…]`, describe charts/diagrams/photos succinctly). Replace each `[image_url: <url>]` line with the corresponding `[image: <content>]` block. Upsert via `upsert_bookmark`. Idempotent: a second run is a no-op once markers are replaced.
-- CLI flags mirroring the other scripts: `--dry-run`, `--limit N`, `--id <tweetId>` for targeted testing. Honor `IMPORT_DEBUG`.
-- Failure handling: image fetch / vision errors should emit `[image: <unreadable>]` (a sentinel that won't be retried) for that image only and continue with the rest. Never crash the loop on one bad image — `pbs.twimg.com` can 404, and that's fine.
-- Don't add to `scheduler.js` initially. Run on demand: `docker compose exec cron node enrich_bookmarks.js`.
-
-**Open questions for the next chat:**
-- Should we normalize `pbs.twimg.com` URLs to `name=large` (better resolution for OCR) before passing to vision? The scrape captured `name=medium` for some.
-- Batching strategy: one image per vision call (simpler, more requests) vs N images per call (cheaper, but each image gets less attention from the model). Start with one-per-call.
-- Cost ceiling: 77 image-bearing rows × maybe 1.5 images avg = ~115 vision calls for batch 1. At Opus rates that's a few dollars. Sasha will likely want to confirm before running.
 
 ## Phase 6.2 architecture (locked, for context)
 
