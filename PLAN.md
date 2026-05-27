@@ -61,10 +61,16 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 5.1: New `build` item type. `cron/build_challenge.js` runs Saturday morning, picks a 60–90 min challenge matched to recent Dones, emails it. Separate `build_journal` array in state.
 - 5.2: PWA thumbs up/down per brief item → small `feedback` table keyed by brief date + item index. Resend inbound webhook → Cloudflare Worker / Supabase Edge Function → Claude parses replies → stored as feedback, fires deep-dive responses for substantive asks. Both signals inject into the next brief's prompt.
 
-**Phase 6 — X bookmarks integration. 🟡 6.1/6.2 done; 6.3/6.4 pending.**
+**Phase 6 — X bookmarks integration. 🟡 6.1/6.2/6.2.5/6.3 done; 6.4 pending.**
 - 6.1: 🟡 Built, but the archive bootstrap path is moot for X. `cron/import_bookmarks.js` works end-to-end (verified against a synthetic fixture), but X archives don't include bookmarks — verified 2026-05-24 by inspecting the actual archive. Script retained for any other JSON dump source. Refactored 2026-05-24 onto shared `cron/lib/tag.js` (no behavior change).
 - 6.2: ✅ Built and live. **Architecture pivot from the original plan:** Claude-in-Chrome is a browser-side extension paired with a Claude.ai session — it cannot be driven from the headless cron container. So the scrape is **manual**: drive a Claude.ai session via the Chrome extension at x.com/i/bookmarks, dump bookmarks as JSON (file-download channel, not pasted into chat — Claude-in-Chrome's response filter blocks `key=value` substrings such as image URL query params and tweet bodies containing `--flag=value`), drop the file at `./data/x_bookmarks_NNN.json`, then `docker compose exec cron node sync_bookmarks.js --file …`. The cron-side script normalizes, dedupes vs the existing `bookmarks` table, tags new items via shared `tagBatch`, bulk-upserts as `source='x'`, and bumps `state.lastBookmarkSync` via `saveState` with OCC. **Scope deferred:** no `scheduler.js` entry (sync is manual), no PWA "Sync now" button (waits for 6.3 Interest tab). **Fields preserved in `content` as markers** (no schema migration): `[truncated]` when "Show more" was visible, `[link: title — desc | url]` for external link cards with a real title, `[image_url: <pbs.twimg.com URL>]` per attached image — the last of which is the hook for the next-session image-vision enrichment. Image-URL markers are stripped before tagging (waste tokens) but stay in the stored row. Verified 2026-05-24: 180 real bookmarks ingested, 77 with image markers, 44 truncated, 143/180 tagged. The `cron/lib/tag.js` `normalize()` and `tagBatch()` are the load-bearing shared pieces; do not duplicate them when 6.3/6.4 need parsing.
-- 6.3: 🟡 V1 built (awaiting first real run). **Architecture pivot from the original plan:** bookmarks are *not* displayed in the PWA — they're context data in the codebase. Instead `cron/analyze_bookmarks.js` (manual, like `sync_bookmarks.js`) classifies fresh bookmarks (those with `bookmarked_at > state.lastBookmarkAnalysisAt`) into four buckets via Claude (`noSearch`, batches of 10): `experiment` (concrete 30-90 min dev-workflow tries with title/why/steps/timeToTry), `explore_idea` (weekend-scale ideas with hypothesis/firstAction), `deep_learn` (logged for future Phase 6.4), `noise` (dropped). Dedup is by `hash(title + sortedSourceBookmarkIds)`. Persists to `state.experiments[]`, `state.exploreIdeas[]`, `state.interestProfile` (Claude-generated ~200-word summary + topThemes refreshed from the last 50 bookmarks each run), and bumps `state.lastBookmarkAnalysisAt`. Saves via OCC `saveState`. `weekly_brief.js` now pulls up to 3 suggested experiments + 2 suggested ideas + the interest profile via `recentSuggestions()`/`formatSuggestions()` in `cron/lib/state.js`, injects them above `## RECENT LEARNING CONTEXT`, and the prompt instructs Claude to reproduce them verbatim under a new `## Experiments to try` output section. **Scope deferred to 6.3 V2:** PWA UI for marking experiments tried/liked/disliked; explicit feedback loop driving profile updates; `.md` file persistence; "Sync now" button (sync stays manual). The original "Sync now" + Interest-tab framing is fully scrapped.
+- 6.3: ✅ V1.5 built and run (verified on 180 bookmarks). **Architecture pivot from the original plan:** bookmarks are *not* displayed in the PWA — they're context data in the codebase. The pipeline has two passes, both inside `cron/analyze_bookmarks.js` (manual, like `sync_bookmarks.js`):
+  - **Pass 1 — Per-bookmark classification.** Fresh bookmarks (those with `bookmarked_at > state.lastBookmarkAnalysisAt`) go through Claude (`noSearch`, batches of 10) into four buckets: `experiment` (concrete 30-90 min dev-workflow tries with title/why/steps/timeToTry), `explore_idea` (weekend-scale ideas with hypothesis/firstAction), `deep_learn` (logged this run, persisted as cluster sources via the synthesis pass — no longer a transient bucket), `noise` (dropped). Per-item dedup by `hash(title + sortedSourceBookmarkIds)`. Writes to `state.experiments[]` / `state.exploreIdeas[]`.
+  - **Pass 2 — Cluster + insight synthesis.** All classified non-noise bookmarks get clustered by theme via Claude (min 3 sources/cluster, target 6-12 clusters, cap at 12 to control cost). For each cluster, a second Claude call produces a markdown insight document (`max_tokens: 4096` — the 2048 default truncated the largest 10+ source clusters): one-line meta-pattern in italics, 200-350 word cross-cutting insight, "what this means for how you work" with concrete moves, source-bookmark bullets with one-liners each, 2-4 open questions. Files land at `concepts/<slug>.md` (gitignored, bind-mounted into the cron container via `docker-compose.yml`). After write, the script sweeps `concepts/` and unlinks any `.md` not referenced by this run's `state.insights` (clusters shift slightly between runs and otherwise leave orphans). State carries `state.insights[]` with `{id, title, theme, summary, filePath, sourceBookmarkIds, sourceCount, generatedAt, surfacedAt}`, fully replaced each synthesis run — the `.md` files are the persistent artifact, the state array is the brief-injection cursor. Flag `--skip-synthesis` disables Pass 2 for cheaper iteration.
+  - **Profile refresh.** Final step: regenerates `state.interestProfile` (Claude-generated ~200-word summary + topThemes from the last 50 bookmarks plus any `tried_liked`/`tried_disliked` outcome history).
+  - **Brief integration (`weekly_brief.js`).** Three injection blocks above `## RECENT LEARNING CONTEXT`, all via helpers in `cron/lib/state.js` (`recentInsights`/`formatInsights`, `recentSuggestions`/`formatSuggestions`): up to 3 freshest insights (title + theme + summary + file path), up to 3 oldest-suggested experiments, up to 2 oldest-suggested ideas, plus the interest profile summary + topThemes. The prompt's output structure adds two new top-level sections: `## Insights from your bookmarks` (reproduces insights verbatim, links the `.md` file) and `## Experiments to try` (verbatim experiments + an `### Ideas worth exploring` subhead).
+  - **Verified 2026-05-26:** Ran on the 180-bookmark corpus. Classification distribution: ~38-43 experiment / ~22-23 explore_idea / ~16-18 deep_learn / ~99-101 noise (~55% noise rate is correct — X is mostly noise; bumping that down would force false positives). The synthesis pass produced 11 clusters spanning Claude Code internals, agent skills, autonomous coding loops, official curricula, security, personal-OS patterns, open models, solo-operator businesses, agent tooling, IDE rules. All 11 insight files completed cleanly with `stop=end_turn` after the `max_tokens` bump. Brief-block preview confirmed injection works end-to-end.
+  - **Scope deferred to 6.3 V2:** PWA UI for marking experiments tried/liked/disliked; explicit feedback loop driving profile updates; "Sync now" button (sync stays manual). The original "Sync now" + Interest-tab framing is fully scrapped.
 - 6.4: ⏳ Pending. Curator inspects interest stream weekly and proposes foundational items for Tier 6 that would resolve recurring themes. Daily/weekly briefs receive the last ~10 bookmarks alongside the last 7 Dones. memory.js can surface a related bookmark when reviewing a mastery item.
 
 **Phase 6.2.5 — Image vision enrichment for X bookmarks. ✅ Built and run.**
@@ -80,28 +86,27 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 
 ## Open items / what to do next
 
-1. **Verify Phase 2 in practice.** Sasha has only one Done item at the moment (an item completed yesterday). Trigger the recall manually:
+1. **Verify Phase 2 in practice. ⛔ Blocked.** Both existing Done items (`karp-intro-llms`, `karp-software30`) were marked complete before the Phase 1.2 modal landed, so they have `completedAt: null` and `memory.js` skips them at line 51 (`if (!meta.completedAt) continue;`). Mark a new item done through the PWA modal — the modal captures `completedAt` + optional note/rating — then trigger:
    ```bash
    docker compose exec cron node memory.js --force
    ```
-   Refresh the PWA — yellow recall banner should appear above the tabs. Tap a button and confirm `nextReviewAt` updated. Also confirm the brief shows the `## Memory` section:
+   Yellow recall banner should appear above the PWA tabs. Tap a button and confirm `nextReviewAt` updates. Then:
    ```bash
    docker compose exec cron node daily_brief.js
    ```
-   First moment of truth: does Claude generate a recall question that actually tests understanding, or does it surface-skim the title? If weak, tune the PROMPT in `cron/memory.js`.
+   Daily brief should now have a `## Memory` section. If Claude's recall question is surface-skim rather than testing understanding, tune the PROMPT in `cron/memory.js`.
 
-2. **Smoke-test Phase 6.3 V1 on the existing 180 bookmarks.** First dry-run, then real run, then trigger a weekly brief to confirm experiments/ideas land:
+2. **Trigger a real weekly brief.** Synthesis pass produced 11 insights from your 180 bookmarks and the brief integration is wired. We deliberately didn't fire `weekly_brief.js` after the synthesis ran (it sends a real email + costs ~16 web searches). When ready:
    ```bash
-   docker compose exec cron node analyze_bookmarks.js --dry-run    # inspect classification + sample suggestions
-   docker compose exec cron node analyze_bookmarks.js              # real write: state.experiments / exploreIdeas / interestProfile
-   docker compose exec cron node analyze_bookmarks.js              # second run should be a no-op ("nothing new; profile refresh skipped")
-   docker compose exec cron node weekly_brief.js                   # weekly email should now have ## Experiments to try
+   docker compose exec cron node weekly_brief.js
    ```
-   First moment of truth: does Claude produce experiments that are *actually* worth trying (concrete, sized correctly), or does it hallucinate "Try this!" content out of vague tweets? If quality is weak, tune `buildClassifyPrompt` / `buildProfilePrompt` in `cron/analyze_bookmarks.js`.
+   Inspect the resulting email — `## Insights from your bookmarks` should appear between `## Worth your commute` and `## Experiments to try`, with the 3 freshest cluster insights (title, italic theme, summary, file path). The `## Experiments to try` section should reproduce 3 experiments + an `### Ideas worth exploring` subhead with 2 ideas.
 
-3. **Phase 6.3 V2 (deferred).** PWA experiment tracker, explicit feedback (tried/liked/disliked), profile feedback loop, optional `.md` persistence in a `concepts/` folder. Hold until V1 proves it's producing real signal.
+3. **Phase 6.3 V2 (deferred).** PWA UI to mark experiments tried/liked/disliked, Resend inbound webhook for email-reply feedback (Phase 5.2 territory), explicit feedback loop driving profile-personalization (so future analyses surface items resembling things he liked), state-bloat cleanup (after several runs `state.experiments` accumulates near-duplicates with slightly different titles — semantic dedup or periodic sweep). Empty-content bookmarks (~21% of corpus, all scrape gaps where X exposed no body text) are a known noise floor — fix is upstream in the scrape, not in classification.
 
-4. **Phase 3a (audio) is queued after 6.x.** Biggest UX shift. Don't start until at least 6.3 V1 is producing useful experiments so audio has real content to talk about.
+4. **Phase 6.4. ⏳ Pending.** Curator inspects bookmarks weekly and proposes foundational Tier 6 evergreens. The synthesis pass's `deep_learn` cluster sources are the natural input — they're the bookmarks Claude itself flagged as worth deep study. Daily/weekly briefs already get the interest profile; 6.4 adds the SEED-suggestion output.
+
+5. **Phase 3a (audio) is queued after 6.x.** Biggest UX shift. Don't start until at least one weekly brief with the new synthesis section has been read, so audio has real content to talk about.
 
 ## Phase 6.2 architecture (locked, for context)
 
@@ -124,6 +129,14 @@ These are specific to this redesign and not in CLAUDE.md.
 - **`mergeStates` in `frontend/index.html`.** Per-item last-write-wins via item.updatedAt. Top-level fields (`collapsed`, `pendingMemory`) use outer `state.updatedAt`. New top-level fields need to be added to mergeStates explicitly or they'll be lost on pull.
 - **Per-item memory fields live in JSONB.** `completedAt`, `note`, `rating`, `lastReviewedAt`, `nextReviewAt`, `reviewStep`, `evergreen`, `rereadEvery`, `stream`, `source`, `sourceUrl`, `tags`, `promotedAt` all sit inside each `state.items[id]` value. No schema migration needed when adding more.
 - **The `state.pendingMemory` shape.** `{ itemId, question, generatedAt (iso), generatedFor (yyyy-mm-dd), reviewedNoteAt (iso) }`. `daily_brief.js` only renders it if `generatedFor === today's date`.
+- **Phase 6.3 state shapes (top-level keys, all in JSONB).**
+  - `state.experiments[]` — `{ id (exp_<hash>), title, why, steps[], timeToTry, sourceBookmarkIds[], status: "suggested"|"tried_liked"|"tried_disliked"|"dismissed", suggestedAt, triedAt, outcome }`. Appended (deduped by id) per run. V2 will add explicit-feedback transitions.
+  - `state.exploreIdeas[]` — same shape minus `steps`/`timeToTry`, plus `hypothesis`/`firstAction`.
+  - `state.interestProfile` — `{ summary (~200 words), topThemes[8-12], generatedAt }`. Replaced each run.
+  - `state.insights[]` — `{ id (ins_<clusterHash>), title, theme, summary, filePath ("concepts/<slug>.md"), sourceBookmarkIds[], sourceCount, generatedAt, surfacedAt }`. **Fully replaced** each synthesis run — the `.md` files are the persistent artifact, the array is just the brief-injection cursor.
+  - `state.lastBookmarkAnalysisAt` — ISO timestamp; the analyze run filters bookmarks newer than this. `--since YYYY-MM-DD` overrides.
+- **Bookmark synthesis is `analyze_bookmarks.js` two-pass.** Classification first (per-bookmark, batches of 10), then synthesis (cluster all non-noise items via Claude into 6-12 themes, generate one `.md` per cluster via a second Claude call with `max_tokens: 4096` — the 2048 default truncates 10+ source clusters). The script auto-cleans orphan `concepts/*.md` files at the end (clusters shift slightly between runs and otherwise leave stale files). Use `--skip-synthesis` for cheap iteration on the classification prompts alone.
+- **`./concepts` is bind-mounted** into the cron container as `/app/concepts` via `docker-compose.yml`. New volume mounts require `docker compose up -d cron` (or full restart) to take effect — a `docker compose restart cron` won't apply mount changes.
 - **`LEARNING_SYNC_ID` in `.env`.** Required for cron to read state. Sasha's value: `gdukt-wb8dc-rwfk2-yzyw6`. If `.env` doesn't have it on the host, `state.js` degrades gracefully.
 
 ## Deployment cheatsheet
@@ -143,6 +156,10 @@ docker compose exec cron node memory.js --force
 docker compose exec cron node daily_brief.js
 docker compose exec cron node weekly_brief.js
 docker compose exec cron node curator.js
+docker compose exec cron node analyze_bookmarks.js                  # Phase 6.3 — classify fresh bookmarks + synthesize concept notes
+docker compose exec cron node analyze_bookmarks.js --dry-run        # preview without writing state or .md files
+docker compose exec cron node analyze_bookmarks.js --since 2025-01-01 # force re-classification of the whole corpus
+docker compose exec cron node analyze_bookmarks.js --skip-synthesis # cheap iteration — classification only, no cluster pass
 
 # Tail logs
 docker compose logs -f cron
@@ -150,7 +167,8 @@ docker compose logs -f cron
 
 ## Where the data lives
 
-- **`learning_state`** (Supabase): one JSONB blob per sync_id. Holds `items` (dict by id), `custom`, `collapsed`, `pendingMemory`, `updatedAt`, future `lastBookmarkSync`. Access via `get_state` / `set_state` SECURITY DEFINER RPCs.
-- **`bookmarks`** (Supabase): one row per (sync_id, id) for the interest stream. Access via `get_bookmarks` / `upsert_bookmark` / `bulk_upsert_bookmarks` / `update_bookmark_status` RPCs. Populated by Phase 6.
+- **`learning_state`** (Supabase): one JSONB blob per sync_id. Top-level keys: `items` (dict by id, mastery stream), `custom`, `collapsed`, `pendingMemory`, `updatedAt`, `lastBookmarkSync`, and Phase 6.3 additions: `experiments[]`, `exploreIdeas[]`, `interestProfile`, `insights[]`, `lastBookmarkAnalysisAt`. Access via `get_state` / `set_state` SECURITY DEFINER RPCs (the latter takes optional `p_if_unchanged_since` for OCC).
+- **`bookmarks`** (Supabase): one row per (sync_id, id) for the interest stream. Access via `get_bookmarks` / `upsert_bookmark` / `bulk_upsert_bookmarks` / `update_bookmark_status` RPCs. Populated by `cron/sync_bookmarks.js`; enriched by `cron/enrich_bookmarks.js`; classified + clustered by `cron/analyze_bookmarks.js`.
 - **`frontend/index.html`** SEED constant: the canonical mastery item catalog. The curator writes to it; everything else reads it.
+- **`concepts/*.md`** on the host (gitignored, bind-mounted into the cron container as `/app/concepts`): one markdown file per bookmark cluster, written by the Phase 6.3 synthesis pass. The file path lives in `state.insights[i].filePath`; orphan files (whose slug no longer matches the current insight set) are unlinked at the end of each synthesis run.
 - **`.env`** on the host: secrets (Anthropic/Resend keys) + `LEARNING_SYNC_ID`. Gitignored.
