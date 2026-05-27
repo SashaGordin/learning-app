@@ -6,3 +6,7 @@ node_modules/
 # Personal one-shot import data (X archive bookmarks.js, etc.)
 data/*
 !data/.gitkeep
+
+# Generated bookmark-synthesis concept notes (Phase 6.3 synthesis pass)
+concepts/*
+!concepts/.gitkeep

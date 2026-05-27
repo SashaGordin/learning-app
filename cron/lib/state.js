@@ -193,6 +193,44 @@ export function formatPersonalization(dones) {
 }
 
 /**
+ * Returns the freshest N bookmark-synthesis insights for brief injection.
+ * Populated by cron/analyze_bookmarks.js. Sorted newest-first by
+ * generatedAt. Returns an empty array if state isn't loaded or no insights
+ * exist yet.
+ */
+export async function recentInsights({ limit = 3 } = {}) {
+  const state = await loadState();
+  if (!state || !Array.isArray(state.insights)) return [];
+  return [...state.insights]
+    .sort((a, b) => (b.generatedAt || "").localeCompare(a.generatedAt || ""))
+    .slice(0, Math.max(limit, 0));
+}
+
+/**
+ * Formats a set of insights as a Markdown block for brief-prompt injection.
+ * Each insight surfaces title, theme (the cross-cutting pattern), summary,
+ * the source file (relative path Sasha can grep), and source bookmark count.
+ * Returns an empty string when there's nothing to inject so callers can
+ * template unconditionally.
+ */
+export function formatInsights(insights = []) {
+  if (!insights || !insights.length) return "";
+  const parts = [
+    "## INSIGHTS FROM YOUR BOOKMARKS",
+    "These are cross-cutting concept notes Sasha generated this week by clustering his bookmarks. Reproduce them VERBATIM in the brief's `## Insights from your bookmarks` section — title, theme, and summary; cite the source file path so he knows where to find the full note. Do not summarize or paraphrase; the value here is in the synthesis Claude already did. If multiple insights are listed, include all of them.",
+    "",
+  ];
+  for (const i of insights) {
+    parts.push(`- **${i.title}** (${i.sourceCount || (Array.isArray(i.sourceBookmarkIds) ? i.sourceBookmarkIds.length : "?")} sources)`);
+    if (i.theme) parts.push(`  theme: ${i.theme}`);
+    if (i.summary) parts.push(`  summary: ${i.summary}`);
+    if (i.filePath) parts.push(`  full note: \`${i.filePath}\``);
+  }
+  parts.push("");
+  return parts.join("\n");
+}
+
+/**
  * Returns experiment/idea suggestions + interest profile for brief injection.
  * Pulls up to `experimentLimit` experiments and `ideaLimit` ideas with
  * status === "suggested", oldest-suggested-first so they age into the brief

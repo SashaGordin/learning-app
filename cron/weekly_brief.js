@@ -7,6 +7,8 @@ import {
   formatPersonalization,
   recentSuggestions,
   formatSuggestions,
+  recentInsights,
+  formatInsights,
 } from "./lib/state.js";
 
 const today = new Date();
@@ -34,11 +36,18 @@ if (suggestions.profile?.summary) {
   console.log(`[weekly_brief] interest profile generated ${suggestions.profile.generatedAt || "—"}`);
 }
 
+// Bookmark-cluster insight notes (Phase 6.3 synthesis pass). Up to 3 freshest.
+const insights = await recentInsights({ limit: 3 });
+const insightBlock = formatInsights(insights);
+if (insights.length) {
+  console.log(`[weekly_brief] injecting ${insights.length} bookmark insights`);
+}
+
 const PROMPT = `You are producing Sasha's WEEKLY deep brief on AI/agentic engineering. Sasha is a developer who gets a 5-minute daily brief; this is the longer Monday-morning commute read. Target ~15-20 minutes of reading (1500-2500 words).
 
 Sasha is interested in: agentic engineering, building agents, Claude Code best practices, MCP, coding agents (Cursor, Aider, Cline, Codex CLI, OpenCode, "Pi"), open-source models (Hermes / Nous Research, Llama, Qwen), and LLM updates from Anthropic, OpenAI, Google, Meta. Sasha wants to be told what to PAY ATTENTION TO — not just a recap.
 
-${suggestionBlock}${personalization}
+${insightBlock}${suggestionBlock}${personalization}
 TASK
 Cover the past 7 days (${range}). Run 8-12 web searches across:
 - Claude Code / Anthropic releases and engineering posts
@@ -67,6 +76,9 @@ One tight paragraph: if Sasha reads one section, this is what mattered most this
 - Format and length
 - One paragraph on what they'll get
 - Where it fits (commute? evening? weekend?)
+
+## Insights from your bookmarks
+Reproduce each item from the INSIGHTS FROM YOUR BOOKMARKS block verbatim under this heading. For each: bold title (with source count in parens), an italicized one-line "theme" beneath it, then the summary sentence, then a "Full note: \`<filePath>\`" line so Sasha can open the .md file. If no insights were provided, omit this whole section.
 
 ## Experiments to try
 Reproduce the items from the EXPERIMENTS TO SURFACE THIS WEEK block verbatim under this heading — title (with timeToTry in parens), the "why" sentence, and a numbered or bulleted steps list. Then a "### Ideas worth exploring" subheading with the IDEAS WORTH EXPLORING entries (title + hypothesis + first action). If neither block was provided, omit this whole section.

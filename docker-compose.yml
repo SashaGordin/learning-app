@@ -27,6 +27,7 @@ services:
       - ./cron:/app/cron                    # mounted for easy iteration; remove for prod
       - /app/cron/node_modules              # keep image-built deps from being shadowed by the bind mount above
       - ./data:/app/data:ro                 # one-shot inputs (e.g. X archive bookmarks.js)
+      - ./concepts:/app/concepts           # analyze_bookmarks.js synthesis pass writes .md insights here
     init: true
 
 volumes:

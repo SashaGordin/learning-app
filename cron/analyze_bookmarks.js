@@ -1,34 +1,48 @@
-// Analyze fresh X bookmarks into an experiment/build stream.
+// Analyze fresh X bookmarks into an experiment/build stream + cluster all
+// classified bookmarks into cross-cutting concept notes.
 //
-// Reads bookmarks from Supabase (via get_bookmarks RPC), filters to anything
-// bookmarked since state.lastBookmarkAnalysisAt, asks Claude to classify each
-// into one of four buckets (experiment / explore_idea / deep_learn / noise),
-// and extracts actionable fields for the first two. Then refreshes
-// state.interestProfile from the broader corpus + any existing experiment
-// outcomes. Writes everything back via saveState with OCC.
+// Reads bookmarks from Supabase (via get_bookmarks RPC), filters fresh ones
+// (bookmarked since state.lastBookmarkAnalysisAt), asks Claude to classify
+// each into experiment / explore_idea / deep_learn / noise and extracts
+// actionable fields for the first two. Then runs a SYNTHESIS pass over ALL
+// classified non-noise bookmarks (fresh + already-analyzed earlier ones that
+// we re-pull from Supabase): cluster by theme, generate one markdown
+// "insight document" per cluster, write to concepts/<slug>.md (gitignored).
+// Finally refreshes state.interestProfile.
 //
 //   docker compose exec cron node analyze_bookmarks.js
 //   docker compose exec cron node analyze_bookmarks.js --dry-run
 //   docker compose exec cron node analyze_bookmarks.js --since 2026-05-01
+//   docker compose exec cron node analyze_bookmarks.js --skip-synthesis
 //
 // Output lands in state.experiments[] / state.exploreIdeas[] /
-// state.interestProfile. weekly_brief.js reads these and surfaces a small
-// number of "suggested"-status entries per week. Phase 6.4 will later pick
-// up the deep_learn classifications for mastery suggestions; for now they're
-// logged but not persisted.
+// state.interestProfile / state.insights, plus concepts/*.md on disk. The
+// weekly_brief.js reads all three and surfaces a handful per week.
 //
-// Idempotent: re-running with no new bookmarks is a no-op (skips profile
-// refresh too). Within a run, dedup by hash(title + sorted sourceBookmarkIds)
-// so an item already in state.experiments isn't appended again.
+// Idempotent in the classification pass: re-running with no new bookmarks
+// skips both classification AND synthesis (synthesis depends on classified
+// items from this run). Per-experiment/idea dedup is by
+// hash(title + sortedSourceBookmarkIds). Insight files are overwritten by
+// slug — the latest understanding wins; old concepts/*.md persist if the
+// theme no longer clusters.
 
 import crypto from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { ask } from "./lib/claude.js";
 import { loadState, saveState } from "./lib/state.js";
 
-const BATCH_SIZE = 10;          // bookmarks per classification call
-const MAX_CONTENT_CHARS = 700;  // truncate each bookmark's content for the prompt
-const PROFILE_CORPUS_SIZE = 50; // last N bookmarks for profile context
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CONCEPTS_DIR = resolve(__dirname, "..", "concepts");
+
+const BATCH_SIZE = 10;            // bookmarks per classification call
+const MAX_CONTENT_CHARS = 700;    // truncate each bookmark's content for the prompt
+const PROFILE_CORPUS_SIZE = 50;   // last N bookmarks for profile context
+const CLUSTER_MIN_SIZE = 3;       // minimum bookmarks for a real cluster
+const MAX_INSIGHTS_PER_RUN = 12;  // safety cap on insight-generation calls
+const INSIGHT_CONTENT_CHARS = 600;// per-source content sent to insight-gen prompt
 
 const isoNow = new Date().toISOString();
 
@@ -43,6 +57,7 @@ function arg(name) {
 }
 const DRY = flag("dry-run");
 const SINCE = arg("since");
+const SKIP_SYNTHESIS = flag("skip-synthesis");
 
 // ---- helpers -------------------------------------------------------------
 function supaClient() {
@@ -79,6 +94,31 @@ function parseJsonLoose(raw) {
   const arr = txt.match(/\[[\s\S]*\]/);
   if (arr) txt = arr[0];
   return JSON.parse(txt);
+}
+
+function parseJsonObjectLoose(raw) {
+  let txt = raw;
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) txt = fence[1];
+  const obj = txt.match(/\{[\s\S]*\}/);
+  if (obj) txt = obj[0];
+  return JSON.parse(txt);
+}
+
+function slugify(s) {
+  return (s || "untitled")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    || "untitled";
+}
+
+function hashCluster(ids) {
+  return crypto.createHash("sha256")
+    .update([...ids].sort().join(","))
+    .digest("hex")
+    .slice(0, 10);
 }
 
 // ---- prompts -------------------------------------------------------------
@@ -154,6 +194,81 @@ Return STRICT JSON only — no prose, no markdown fences. Shape:
 }`;
 }
 
+function buildClusterPrompt(items) {
+  const listing = items.map(i =>
+    `id: ${i.id} | bucket: ${i.bucket} | tags: ${(i.tags || []).join(", ") || "—"} | snippet: ${i.snippet}`
+  ).join("\n");
+
+  return `You are clustering Sasha's X bookmarks by THEME — finding groups that, taken together, reveal a cross-cutting insight he could internalize and act on. Sasha is a developer focused on AI / agentic engineering / Claude Code / coding agents.
+
+CONSTRAINTS:
+- Aim for 6-12 clusters total. Don't force more if the corpus doesn't warrant it.
+- Each cluster MUST contain at least ${CLUSTER_MIN_SIZE} bookmarks. Lone bookmarks don't form clusters.
+- A bookmark belongs to AT MOST ONE cluster (assign to where it fits best).
+- It's fine if many bookmarks don't fit any cluster — leave them out, don't pad.
+- Cluster TITLES should be precise themes that reveal a PATTERN across sources, not just a topic.
+  - Good: "How power users architect Claude Code memory" / "Codex automation loops, end-to-end"
+  - Bad: "AI tools" / "Productivity" / "Stuff Sasha likes"
+- Prefer clusters that span DIFFERENT buckets when the theme warrants it (an experiment + a deep_learn paper + an explore_idea can all reinforce one cross-cutting insight).
+
+For each cluster also write:
+- "theme": 1-2 sentence statement of the cross-cutting PATTERN these bookmarks reveal when read together.
+- "summary": one tight sentence (<=140 chars) suitable for injection into a weekly brief.
+
+CLASSIFIED BOOKMARKS:
+${listing}
+
+Return STRICT JSON only — no prose, no markdown fences:
+{"clusters": [{"title": "...", "theme": "...", "summary": "...", "bookmarkIds": ["str", "str", ...]}, ...]}
+
+The bookmarkIds MUST be strings (with double quotes) — tweet ids exceed JS safe-integer range.`;
+}
+
+function buildInsightPrompt(cluster, sources) {
+  const sourceBlock = sources.map((s, i) => {
+    const author = s.author ? `@${s.author}` : "?";
+    const body = (s.fullContent || s.snippet || "")
+      .replace(/\s+/g, " ")
+      .slice(0, INSIGHT_CONTENT_CHARS);
+    return `### Source ${i + 1} (id: ${s.id}, ${author}, bucket: ${s.bucket})\n${body}`;
+  }).join("\n\n");
+
+  return `You are writing ONE concept note for Sasha — a cross-cutting synthesis of ${sources.length} bookmarks that share a theme. The output is a markdown document that goes into his learning library. Write it as something he'll actually want to revisit in 3 months — concrete, pattern-revealing, not generic.
+
+Sasha is a developer focused on AI / agentic engineering / Claude Code / coding agents.
+
+CLUSTER TITLE: ${cluster.title}
+THEME: ${cluster.theme}
+
+SOURCE BOOKMARKS — use these as evidence; synthesize across them, don't just list them.
+
+${sourceBlock}
+
+Output a markdown document with this EXACT structure. No preamble. No emoji. No conclusion section. Don't add a "Generated" timestamp.
+
+# ${cluster.title}
+
+> *<a one-line meta-pattern statement in italics — what's the cross-cutting insight when these ${sources.length} bookmarks are read together?>*
+
+## Cross-cutting insight
+
+<200-350 words. Synthesize what these bookmarks ACTUALLY tell you when read together. Reference specific sources by number — "Source 3 hints that..." beats "one tweet says...". Note tensions or contradictions if present. Aim for an insight Sasha doesn't already have just from skimming the individual tweets — the value here is the synthesis.>
+
+## What this means for how you work
+
+<100-150 words. If Sasha internalized this insight, what would he do DIFFERENTLY next week? Be specific: workflow changes, mental-model updates, defaults to adopt, tools to wire in. Not "consider X" — concrete action.>
+
+## Source bookmarks
+
+- [Source 1 — @<author>](https://x.com/i/web/status/<id>): <one-line summary of THIS bookmark's contribution to the synthesis>
+- ...
+<One bullet per source, in the order they appeared above. Use the source's actual id and author from the SOURCE BOOKMARKS block.>
+
+## Open questions
+
+- <2-4 follow-up questions that would deepen Sasha's understanding>`;
+}
+
 // ---- core calls ----------------------------------------------------------
 async function classifyBatch(batch, profileText) {
   const prompt = buildClassifyPrompt(batch, profileText);
@@ -209,6 +324,128 @@ async function refreshInterestProfile(corpus, experiments) {
   };
 }
 
+// ---- synthesis pass ------------------------------------------------------
+
+async function clusterBookmarks(items) {
+  const prompt = buildClusterPrompt(items);
+  let raw;
+  try {
+    raw = await ask(prompt, { noSearch: true, maxTokens: 4096 });
+  } catch (e) {
+    console.warn(`[analyze] cluster call failed: ${e?.message || e}`);
+    return [];
+  }
+  if (process.env.IMPORT_DEBUG) console.log(`[analyze][debug] raw cluster response:\n${raw}\n---`);
+
+  let parsed;
+  try { parsed = parseJsonObjectLoose(raw); }
+  catch (e) {
+    console.warn(`[analyze] cluster response was not valid JSON; skipping synthesis.`);
+    return [];
+  }
+  const clusters = Array.isArray(parsed?.clusters) ? parsed.clusters : [];
+
+  // Filter: must have title + theme + summary + min cluster size; bookmarkIds
+  // must be strings that actually exist in the input.
+  const validIds = new Set(items.map(i => i.id));
+  const out = [];
+  for (const c of clusters) {
+    if (!c || typeof c.title !== "string" || typeof c.theme !== "string") continue;
+    const ids = Array.isArray(c.bookmarkIds)
+      ? c.bookmarkIds.filter(id => typeof id === "string" && validIds.has(id))
+      : [];
+    if (ids.length < CLUSTER_MIN_SIZE) continue;
+    out.push({
+      title: c.title.trim(),
+      theme: c.theme.trim(),
+      summary: (typeof c.summary === "string" ? c.summary : c.theme).trim().slice(0, 160),
+      bookmarkIds: ids,
+    });
+  }
+  return out;
+}
+
+async function generateInsightMarkdown(cluster, sources) {
+  const prompt = buildInsightPrompt(cluster, sources);
+  try {
+    // 4096 gives headroom for clusters with 10+ sources (each needs a bullet
+    // in the source list + the insight prose). Empirically clusters of 5
+    // need ~1500-1800; clusters of 15 hit 2048 and truncate.
+    const raw = await ask(prompt, { noSearch: true, maxTokens: 4096 });
+    if (!raw || raw.trim().length < 100) {
+      console.warn(`[analyze]   insight response suspiciously short for "${cluster.title}"`);
+      return null;
+    }
+    return raw.trim();
+  } catch (e) {
+    console.warn(`[analyze]   insight call failed for "${cluster.title}": ${e?.message || e}`);
+    return null;
+  }
+}
+
+async function synthesizeInsights(classified) {
+  const nonNoise = classified.filter(c => c && c.bucket !== "noise");
+  if (nonNoise.length < CLUSTER_MIN_SIZE * 2) {
+    console.log(`[analyze] only ${nonNoise.length} non-noise bookmarks — skipping synthesis (need >= ${CLUSTER_MIN_SIZE * 2})`);
+    return [];
+  }
+
+  console.log(`[analyze] clustering ${nonNoise.length} non-noise bookmarks`);
+  let clusters = await clusterBookmarks(nonNoise);
+  if (!clusters.length) {
+    console.log("[analyze] no usable clusters returned");
+    return [];
+  }
+  if (clusters.length > MAX_INSIGHTS_PER_RUN) {
+    console.log(`[analyze] capping ${clusters.length} clusters to ${MAX_INSIGHTS_PER_RUN}`);
+    clusters = clusters.slice(0, MAX_INSIGHTS_PER_RUN);
+  }
+  console.log(`[analyze] generating ${clusters.length} insight notes`);
+
+  const byId = new Map();
+  for (const c of classified) byId.set(c.id, c);
+
+  if (!DRY) await mkdir(CONCEPTS_DIR, { recursive: true });
+
+  const usedSlugs = new Set();
+  const insights = [];
+  for (let i = 0; i < clusters.length; i++) {
+    const c = clusters[i];
+    const sources = c.bookmarkIds.map(id => byId.get(id)).filter(Boolean);
+    if (sources.length < CLUSTER_MIN_SIZE) continue;
+    console.log(`[analyze]   insight ${i + 1}/${clusters.length}: "${c.title}" (${sources.length} sources)`);
+
+    const md = await generateInsightMarkdown(c, sources);
+    if (!md) continue;
+
+    // Slug collision: append a short hash if two clusters slugify the same.
+    let slug = slugify(c.title);
+    if (usedSlugs.has(slug)) slug = `${slug}-${hashCluster(c.bookmarkIds)}`;
+    usedSlugs.add(slug);
+    const filename = `${slug}.md`;
+    const filePath = `concepts/${filename}`;
+
+    if (!DRY) {
+      await writeFile(resolve(CONCEPTS_DIR, filename), md, "utf8");
+    }
+
+    insights.push({
+      id: `ins_${hashCluster(c.bookmarkIds)}`,
+      title: c.title,
+      theme: c.theme,
+      summary: c.summary,
+      filePath,
+      sourceBookmarkIds: c.bookmarkIds,
+      sourceCount: sources.length,
+      generatedAt: isoNow,
+      surfacedAt: null,
+    });
+  }
+
+  console.log(`[analyze] wrote ${insights.length} insight notes to ${DRY ? "(dry-run, not written)" : CONCEPTS_DIR}`);
+  return insights;
+}
+
 // ---- main ----------------------------------------------------------------
 async function main() {
   const syncId = process.env.LEARNING_SYNC_ID;
@@ -254,6 +491,9 @@ async function main() {
   const newIdeas = [];
   const deepLearnIds = [];
   const bucketCounts = { experiment: 0, explore_idea: 0, deep_learn: 0, noise: 0, unknown: 0 };
+  // Captures every bookmark we classified this run — fed to the synthesis pass
+  // so it can cluster across buckets and generate concept notes.
+  const classifiedItems = [];
 
   // Classify in batches.
   const batches = Math.ceil(fresh.length / BATCH_SIZE);
@@ -277,6 +517,18 @@ async function main() {
         continue;
       }
       bucketCounts[r.bucket] = (bucketCounts[r.bucket] || 0) + 1;
+
+      // Record this classification for the synthesis pass (which clusters
+      // across all non-noise buckets). Done unconditionally so noise is also
+      // captured for counting; synthesis filters it out itself.
+      classifiedItems.push({
+        id: b.id,
+        bucket: r.bucket,
+        tags: b.tags || [],
+        author: b.author || null,
+        snippet: contentForAnalysis(b.content).replace(/\s+/g, " ").slice(0, 160),
+        fullContent: b.content || "",
+      });
 
       if (r.bucket === "experiment" && r.experiment && typeof r.experiment.title === "string") {
         const e = r.experiment;
@@ -332,6 +584,15 @@ async function main() {
     console.log(`[analyze][debug] deep_learn ids: ${deepLearnIds.join(", ")}`);
   }
 
+  // Synthesis pass: cluster all classified non-noise bookmarks into themes
+  // and write one .md insight note per cluster. State.insights is REPLACED
+  // each run — the freshest synthesis wins, with .md files persisting as the
+  // historical artifact. Skipped with --skip-synthesis or if too few items.
+  const insights = SKIP_SYNTHESIS
+    ? []
+    : await synthesizeInsights(classifiedItems);
+  if (SKIP_SYNTHESIS) console.log("[analyze] --skip-synthesis: cluster + insight pass disabled");
+
   // Refresh interest profile from a wider context — use the latest N bookmarks
   // overall (not just freshly analyzed), so the profile reflects accumulated
   // taste, not just the last sync slice.
@@ -351,11 +612,18 @@ async function main() {
   );
 
   if (DRY) {
-    console.log("[analyze] --dry-run: skipping state write");
+    console.log("[analyze] --dry-run: skipping state write + .md file write");
     console.log("[analyze] sample new experiments:");
     console.log(JSON.stringify(newExperiments.slice(0, 3), null, 2));
     console.log("[analyze] sample new ideas:");
     console.log(JSON.stringify(newIdeas.slice(0, 3), null, 2));
+    if (insights.length) {
+      console.log(`[analyze] proposed insights (${insights.length}):`);
+      console.log(JSON.stringify(
+        insights.map(i => ({ id: i.id, title: i.title, sourceCount: i.sourceCount, filePath: i.filePath })),
+        null, 2,
+      ));
+    }
     if (profile) {
       console.log("[analyze] proposed interest profile:");
       console.log(JSON.stringify(profile, null, 2));
@@ -366,6 +634,10 @@ async function main() {
   state.experiments = [...existingExp, ...newExperiments];
   state.exploreIdeas = [...existingIdeas, ...newIdeas];
   if (profile) state.interestProfile = profile;
+  // Replace insights each run — the freshest synthesis wins, .md files
+  // persist as the historical artifact. If synthesis produced nothing this
+  // run (e.g., --skip-synthesis), preserve existing state.insights.
+  if (insights.length) state.insights = insights;
   state.lastBookmarkAnalysisAt = isoNow;
 
   const ok = await saveState(state, { ifUnchangedSince: state.__rowUpdatedAt });
@@ -373,7 +645,7 @@ async function main() {
     console.error("[analyze] saveState failed — nothing persisted (re-run after PWA sync settles)");
     process.exit(1);
   }
-  console.log(`[analyze] saved: +${newExperiments.length} exp, +${newIdeas.length} ideas, profile ${profile ? "refreshed" : "unchanged"}, lastBookmarkAnalysisAt=${isoNow}`);
+  console.log(`[analyze] saved: +${newExperiments.length} exp, +${newIdeas.length} ideas, ${insights.length} insights, profile ${profile ? "refreshed" : "unchanged"}, lastBookmarkAnalysisAt=${isoNow}`);
 }
 
 main().catch(e => {
