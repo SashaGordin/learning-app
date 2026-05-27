@@ -2,7 +2,12 @@
 
 import { ask } from "./lib/claude.js";
 import { sendEmail } from "./lib/email.js";
-import { recentDones, formatPersonalization } from "./lib/state.js";
+import {
+  recentDones,
+  formatPersonalization,
+  recentSuggestions,
+  formatSuggestions,
+} from "./lib/state.js";
 
 const today = new Date();
 const sun = new Date(today);
@@ -18,11 +23,22 @@ const dones = await recentDones(12);
 const personalization = formatPersonalization(dones);
 if (dones.length) console.log(`[weekly_brief] personalizing with ${dones.length} recent done items`);
 
+// Pull bookmark-derived experiments + ideas + interest profile (Phase 6.3).
+// All best-effort; empty strings if state isn't populated yet.
+const suggestions = await recentSuggestions({ experimentLimit: 3, ideaLimit: 2 });
+const suggestionBlock = formatSuggestions(suggestions);
+if (suggestions.experiments.length || suggestions.ideas.length) {
+  console.log(`[weekly_brief] injecting ${suggestions.experiments.length} experiments + ${suggestions.ideas.length} ideas from bookmarks`);
+}
+if (suggestions.profile?.summary) {
+  console.log(`[weekly_brief] interest profile generated ${suggestions.profile.generatedAt || "—"}`);
+}
+
 const PROMPT = `You are producing Sasha's WEEKLY deep brief on AI/agentic engineering. Sasha is a developer who gets a 5-minute daily brief; this is the longer Monday-morning commute read. Target ~15-20 minutes of reading (1500-2500 words).
 
 Sasha is interested in: agentic engineering, building agents, Claude Code best practices, MCP, coding agents (Cursor, Aider, Cline, Codex CLI, OpenCode, "Pi"), open-source models (Hermes / Nous Research, Llama, Qwen), and LLM updates from Anthropic, OpenAI, Google, Meta. Sasha wants to be told what to PAY ATTENTION TO — not just a recap.
 
-${personalization}
+${suggestionBlock}${personalization}
 TASK
 Cover the past 7 days (${range}). Run 8-12 web searches across:
 - Claude Code / Anthropic releases and engineering posts
@@ -51,6 +67,9 @@ One tight paragraph: if Sasha reads one section, this is what mattered most this
 - Format and length
 - One paragraph on what they'll get
 - Where it fits (commute? evening? weekend?)
+
+## Experiments to try
+Reproduce the items from the EXPERIMENTS TO SURFACE THIS WEEK block verbatim under this heading — title (with timeToTry in parens), the "why" sentence, and a numbered or bulleted steps list. Then a "### Ideas worth exploring" subheading with the IDEAS WORTH EXPLORING entries (title + hypothesis + first action). If neither block was provided, omit this whole section.
 
 ## Add to the backlog
 1-3 specific resources for the persistent learning backlog. Each: title, source, URL, estimated time, one-line why.

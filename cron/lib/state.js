@@ -191,3 +191,89 @@ export function formatPersonalization(dones) {
     "",
   ].join("\n");
 }
+
+/**
+ * Returns experiment/idea suggestions + interest profile for brief injection.
+ * Pulls up to `experimentLimit` experiments and `ideaLimit` ideas with
+ * status === "suggested", oldest-suggested-first so they age into the brief
+ * deterministically. Best-effort: returns empty fields if state isn't
+ * available or the keys are missing — Phase 6.3 V1 populates them via
+ * cron/analyze_bookmarks.js.
+ */
+export async function recentSuggestions({ experimentLimit = 3, ideaLimit = 2 } = {}) {
+  const state = await loadState();
+  if (!state) return { experiments: [], ideas: [], profile: null };
+
+  const sortBySuggested = (a, b) =>
+    (a.suggestedAt || "").localeCompare(b.suggestedAt || "");
+
+  const experiments = (state.experiments || [])
+    .filter(e => e && e.status === "suggested")
+    .sort(sortBySuggested)
+    .slice(0, Math.max(experimentLimit, 0));
+
+  const ideas = (state.exploreIdeas || [])
+    .filter(e => e && e.status === "suggested")
+    .sort(sortBySuggested)
+    .slice(0, Math.max(ideaLimit, 0));
+
+  return { experiments, ideas, profile: state.interestProfile || null };
+}
+
+/**
+ * Formats the interest profile + suggested experiments + suggested ideas as
+ * Markdown blocks to inject into a brief prompt. Returns an empty string if
+ * there's nothing to inject so callers can template unconditionally.
+ */
+export function formatSuggestions({ experiments = [], ideas = [], profile = null } = {}) {
+  if (!experiments.length && !ideas.length && !profile) return "";
+
+  const parts = [];
+
+  if (profile?.summary) {
+    parts.push("## INTEREST PROFILE");
+    parts.push("This is Sasha's accumulated interest profile, derived from his X bookmarks. Use it to bias what you surface — what genuinely fits him, not just what's trending.");
+    parts.push("");
+    parts.push(profile.summary);
+    if (Array.isArray(profile.topThemes) && profile.topThemes.length) {
+      parts.push("");
+      parts.push(`Top themes: ${profile.topThemes.join(", ")}`);
+    }
+    parts.push("");
+  }
+
+  if (experiments.length) {
+    parts.push("## EXPERIMENTS TO SURFACE THIS WEEK");
+    parts.push("These are concrete dev-workflow / tooling experiments derived from Sasha's recent bookmarks. Reproduce them VERBATIM (title, why, steps, timeToTry) in the brief's `## Experiments to try` section — do not paraphrase, summarize, or pick favorites; if more than 3 are listed include all of them.");
+    parts.push("");
+    for (const e of experiments) {
+      parts.push(`- **${e.title}** ${e.timeToTry ? `(${e.timeToTry})` : ""}`.trim());
+      if (e.why) parts.push(`  why: ${e.why}`);
+      if (Array.isArray(e.steps) && e.steps.length) {
+        parts.push(`  steps:`);
+        for (const s of e.steps) parts.push(`    - ${s}`);
+      }
+      if (Array.isArray(e.sourceBookmarkIds) && e.sourceBookmarkIds.length) {
+        parts.push(`  source: https://x.com/i/web/status/${e.sourceBookmarkIds[0]}`);
+      }
+    }
+    parts.push("");
+  }
+
+  if (ideas.length) {
+    parts.push("## IDEAS WORTH EXPLORING");
+    parts.push("Bigger weekend-scale ideas from his bookmarks. Reproduce VERBATIM in the brief's `## Ideas worth exploring` subsection of `## Experiments to try`.");
+    parts.push("");
+    for (const e of ideas) {
+      parts.push(`- **${e.title}**`);
+      if (e.hypothesis) parts.push(`  hypothesis: ${e.hypothesis}`);
+      if (e.firstAction) parts.push(`  first action: ${e.firstAction}`);
+      if (Array.isArray(e.sourceBookmarkIds) && e.sourceBookmarkIds.length) {
+        parts.push(`  source: https://x.com/i/web/status/${e.sourceBookmarkIds[0]}`);
+      }
+    }
+    parts.push("");
+  }
+
+  return parts.join("\n");
+}
