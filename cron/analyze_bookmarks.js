@@ -27,7 +27,7 @@
 // theme no longer clusters.
 
 import crypto from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readdir, unlink } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -443,6 +443,29 @@ async function synthesizeInsights(classified) {
   }
 
   console.log(`[analyze] wrote ${insights.length} insight notes to ${DRY ? "(dry-run, not written)" : CONCEPTS_DIR}`);
+
+  // Orphan cleanup: clusters often shift slightly between runs (Claude picks
+  // a different title → different slug → different filename). Without this,
+  // concepts/ accumulates stale .md files from past runs. Keep only files
+  // referenced by this run's insights.
+  if (!DRY && insights.length) {
+    const keep = new Set(insights.map(i => i.filePath.replace(/^concepts\//, "")));
+    try {
+      const existing = await readdir(CONCEPTS_DIR);
+      let removed = 0;
+      for (const f of existing) {
+        if (!f.endsWith(".md")) continue;       // leave .gitkeep, etc. alone
+        if (keep.has(f)) continue;
+        await unlink(resolve(CONCEPTS_DIR, f));
+        if (process.env.IMPORT_DEBUG) console.log(`[analyze]   removed orphan: ${f}`);
+        removed++;
+      }
+      if (removed) console.log(`[analyze] removed ${removed} orphan .md file(s) from prior runs`);
+    } catch (e) {
+      console.warn(`[analyze] orphan cleanup failed: ${e?.message || e}`);
+    }
+  }
+
   return insights;
 }
 
