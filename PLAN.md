@@ -50,7 +50,7 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - `cron/scheduler.js` runs both generation and grading schedules.
 - `cron/lib/state.js` gained `saveState` (with optimistic-concurrency via `if_unchanged_since`) and `getItemById`. Hidden `__rowUpdatedAt` on loaded state for the OCC token.
 - `cron/lib/claude.js` got a `noSearch: true` option to omit the web_search tool.
-- Initial review remains +1 day (Ebbinghaus). SW cache `v5`.
+- Initial review remains +1 day (Ebbinghaus). SW cache `v6`; navigations are network-first and Cloudflare/Caddy explicitly serve `sw.js` without caching so interaction changes cannot run one version behind after deployment.
 
 **Phase 3 — Active-learning audio. ⏳ Deferred.**
 - No TTS news brief. Any audio experiment must chain recall question → one rotating concept → experiment-of-the-day → one open question.

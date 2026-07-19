@@ -1,8 +1,8 @@
 // Learning Backlog — service worker.
-// Strategy: stale-while-revalidate for static shell, network-first for Supabase API.
+// Strategy: network-first for navigations, stale-while-revalidate for assets.
 // Versioned cache so deploys invalidate cleanly.
 
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `learning-backlog-${CACHE_VERSION}`;
 const SHELL = [
   "./",
@@ -32,7 +32,24 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   if (url.hostname.endsWith("supabase.co") || url.hostname === "esm.sh") return;
 
-  // Cache-first with revalidation for same-origin GETs (the app shell).
+  // App launches and page refreshes must prefer the network. The previous
+  // cache-first navigation strategy could serve an old index.html once after
+  // every deploy, which was enough to submit recall with obsolete logic.
+  if (url.origin === location.origin && e.request.mode === "navigate") {
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const response = await fetch(e.request);
+        if (response?.status === 200) await cache.put("./index.html", response.clone());
+        return response;
+      } catch {
+        return (await cache.match(e.request)) || (await cache.match("./index.html"));
+      }
+    })());
+    return;
+  }
+
+  // Static assets remain fast and offline-friendly.
   if (url.origin === location.origin) {
     e.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);

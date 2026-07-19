@@ -6,12 +6,14 @@
     file_server
     try_files {path} {path}/ /index.html
 
-    # Cache the shell aggressively except for the entry point.
-    @assets path *.png *.svg *.ico *.json *.js
+    # Cache static assets, but never pin the service worker itself. If sw.js
+    # is cached for a day, an installed PWA can keep running old interaction
+    # code after a deploy.
+    @assets path *.png *.svg *.ico *.json
     header @assets Cache-Control "public, max-age=86400"
 
-    @html path /index.html /
-    header @html Cache-Control "no-cache"
+    @fresh path /index.html / /sw.js
+    header @fresh Cache-Control "no-cache, no-store, must-revalidate"
 
     log {
         output stdout
