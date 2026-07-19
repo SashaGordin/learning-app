@@ -370,6 +370,57 @@
   .adaptive-tag { color: #6d28d9; background: #ede9fe; border-radius: 999px; padding: 2px 7px; font-size: 11px; font-weight: 600; }
   .mastery-inline { color: #6d28d9; margin-left: 7px; font-size: 11.5px; font-weight: 600; }
 
+  /* Bookmark-derived concepts + experiments */
+  .interest-profile {
+    background: linear-gradient(135deg, #eef2ff, #f5f3ff); border: 1px solid #c7d2fe;
+    border-radius: 12px; padding: 15px 17px; margin-bottom: 14px;
+  }
+  .interest-profile h3 { margin: 0 0 6px; font-size: 14px; color: #3730a3; }
+  .interest-profile p { margin: 0; color: #4b5563; font-size: 13px; }
+  .theme-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+  .theme-chip { background: rgba(255,255,255,.75); border: 1px solid #c7d2fe; color: #4338ca; border-radius: 999px; padding: 3px 8px; font-size: 11.5px; }
+  .surface-intro { color: #6b7280; font-size: 13px; margin: 0 0 14px; }
+  .surface-section-title { margin: 20px 2px 9px; font-size: 15px; color: #111827; }
+  .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 10px; }
+  .concept-card, .experiment-card {
+    background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 15px 16px;
+  }
+  .concept-card h3, .experiment-card h3 { margin: 0; font-size: 15px; line-height: 1.35; color: #111827; }
+  .concept-meta, .experiment-meta { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; margin-bottom: 7px; color: #6b7280; font-size: 11.5px; }
+  .concept-theme { color: #4b5563; font-size: 13px; margin: 7px 0 10px; }
+  .concept-card details { border-top: 1px solid #f3f4f6; padding-top: 9px; }
+  .concept-card summary { cursor: pointer; color: #4338ca; font-size: 12.5px; font-weight: 600; }
+  .concept-body { margin-top: 12px; color: #374151; font-size: 13px; line-height: 1.58; }
+  .concept-body h4 { margin: 18px 0 7px; font-size: 14px; color: #111827; }
+  .concept-body h5 { margin: 14px 0 5px; font-size: 13px; color: #111827; }
+  .concept-body p { margin: 7px 0; }
+  .concept-body blockquote { margin: 8px 0; padding: 8px 11px; border-left: 3px solid #818cf8; background: #eef2ff; color: #4338ca; }
+  .concept-body ul, .concept-body ol { margin: 7px 0; padding-left: 21px; }
+  .concept-body li { margin: 4px 0; }
+  .concept-body a { color: #4338ca; }
+  .concept-body code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .feedback-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+  .feedback-actions button {
+    border: 1px solid #e5e7eb; background: white; color: #4b5563; border-radius: 7px;
+    padding: 6px 9px; font: inherit; font-size: 11.5px; cursor: pointer;
+  }
+  .feedback-actions button:hover { background: #f9fafb; }
+  .feedback-actions button.positive, .feedback-actions button.selected { border-color: #86efac; color: #166534; background: #ecfdf5; }
+  .feedback-actions button.negative { border-color: #fecaca; color: #991b1b; }
+  .feedback-badge { border-radius: 999px; padding: 2px 7px; background: #ecfdf5; color: #166534; font-size: 10.5px; font-weight: 600; }
+  .experiment-list { display: grid; gap: 9px; }
+  .experiment-card .why, .experiment-card .hypothesis { color: #4b5563; font-size: 13px; margin: 7px 0; }
+  .experiment-card ol { margin: 9px 0; padding-left: 21px; color: #374151; font-size: 12.5px; }
+  .experiment-card li { margin: 4px 0; }
+  .first-action { background: #f9fafb; border-left: 3px solid #f59e0b; padding: 7px 9px; margin-top: 8px; font-size: 12.5px; color: #374151; }
+  .source-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .source-links a { color: #6b7280; font-size: 11.5px; }
+  .feedback-history { margin-top: 18px; color: #6b7280; font-size: 12.5px; }
+  .feedback-history summary { cursor: pointer; font-weight: 600; }
+  .history-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; border-top: 1px solid #e5e7eb; padding: 8px 2px; }
+  .history-row button { border: 0; background: none; color: #4338ca; cursor: pointer; font: inherit; font-size: 12px; }
+  .load-more { display: none; margin: 9px auto 0; padding: 7px 13px; border: 1px solid #d1d5db; border-radius: 8px; background: white; color: #4b5563; font: inherit; font-size: 12px; cursor: pointer; }
+
   /* Inline takeaway shown on completed items */
   .done-note {
     margin-top: 5px; font-size: 12.5px; color: #374151;
@@ -431,6 +482,8 @@
   <div class="tabs" id="tabs">
     <div class="tab active" data-view="next">Up next<span class="count" id="count-next">0</span></div>
     <div class="tab" data-view="path">Learning path<span class="count" id="count-path">0</span></div>
+    <div class="tab" data-view="concepts">Concepts<span class="count" id="count-concepts">0</span></div>
+    <div class="tab" data-view="experiments">Experiments<span class="count" id="count-experiments">0</span></div>
     <div class="tab" data-view="backlog">Backlog<span class="count" id="count-backlog">0</span></div>
     <div class="tab" data-view="ongoing">Ongoing reads<span class="count" id="count-ongoing">0</span></div>
   </div>
@@ -441,6 +494,21 @@
     <div id="next-cards"></div>
   </div>
   <div class="view" id="view-path"><div id="path-tiers"></div></div>
+  <div class="view" id="view-concepts">
+    <div id="interest-profile" class="interest-profile" style="display:none"></div>
+    <p class="surface-intro">Cross-cutting ideas synthesized from your saved sources. Open one when you want depth, not another feed.</p>
+    <div id="concept-list" class="concept-grid"></div>
+  </div>
+  <div class="view" id="view-experiments">
+    <p class="surface-intro">Small tests and larger ideas extracted from your interests. Your outcomes become preference evidence for future analysis.</p>
+    <h2 class="surface-section-title">Experiments to try</h2>
+    <div id="experiment-list" class="experiment-list"></div>
+    <button id="more-experiments" class="load-more">Show more experiments</button>
+    <h2 class="surface-section-title">Ideas worth exploring</h2>
+    <div id="idea-list" class="experiment-list"></div>
+    <button id="more-ideas" class="load-more">Show more ideas</button>
+    <div id="experiment-history"></div>
+  </div>
   <div class="view" id="view-backlog">
     <div class="controls">
       <input type="search" id="search" placeholder="Search title, source, why…">
@@ -730,6 +798,10 @@ state.items = state.items || {};
 state.custom = state.custom || {};
 state.collapsed = state.collapsed || {};
 state.memoryReviews = Array.isArray(state.memoryReviews) ? state.memoryReviews : [];
+state.insights = Array.isArray(state.insights) ? state.insights : [];
+state.experiments = Array.isArray(state.experiments) ? state.experiments : [];
+state.exploreIdeas = Array.isArray(state.exploreIdeas) ? state.exploreIdeas : [];
+state.insightFeedback = state.insightFeedback || {};
 state.lastBookmarkSync = state.lastBookmarkSync || null;
 state.activePathId = LEARNING_PATHS.some(p => p.id === state.activePathId)
   ? state.activePathId
@@ -783,7 +855,9 @@ function mergeStates(local, remote) {
   // grading worker. Merge by review id so an unrelated browser edit cannot
   // replace a remotely graded answer with its older "pending" copy.
   const reviewById = new Map();
-  for (const review of [...(remote.memoryReviews || []), ...(local.memoryReviews || [])]) {
+  const remoteReviews = Array.isArray(remote.memoryReviews) ? remote.memoryReviews : [];
+  const localReviews = Array.isArray(local.memoryReviews) ? local.memoryReviews : [];
+  for (const review of [...remoteReviews, ...localReviews]) {
     if (!review?.id) continue;
     const previous = reviewById.get(review.id);
     if (!previous) {
@@ -801,7 +875,9 @@ function mergeStates(local, remote) {
   const newerDated = (left, right) => {
     if (!left) return right;
     if (!right) return left;
-    return (left.updatedAt || "") > (right.updatedAt || "") ? left : right;
+    const leftAt = left.updatedAt || left.generatedAt || "";
+    const rightAt = right.updatedAt || right.generatedAt || "";
+    return leftAt > rightAt ? left : right;
   };
   out.learnerProfile = newerDated(local.learnerProfile, remote.learnerProfile);
   if (!out.learnerProfile) delete out.learnerProfile;
@@ -817,6 +893,50 @@ function mergeStates(local, remote) {
     );
   }
   if (!pathIds.size) delete out.pathRecommendations;
+
+  // Bookmark-derived suggestions are append-only and receive browser-side
+  // outcome updates. Merge by id so a new analysis run and a feedback tap can
+  // coexist without replacing the whole array.
+  const mergeRecords = (localRecords, remoteRecords) => {
+    const records = new Map();
+    const safeLocal = Array.isArray(localRecords) ? localRecords : [];
+    const safeRemote = Array.isArray(remoteRecords) ? remoteRecords : [];
+    for (const record of [...safeRemote, ...safeLocal]) {
+      if (!record?.id) continue;
+      const previous = records.get(record.id);
+      if (!previous) {
+        records.set(record.id, record);
+        continue;
+      }
+      const previousAt = previous.updatedAt || previous.triedAt || previous.suggestedAt || "";
+      const recordAt = record.updatedAt || record.triedAt || record.suggestedAt || "";
+      records.set(record.id, recordAt >= previousAt ? { ...previous, ...record } : { ...record, ...previous });
+    }
+    return [...records.values()];
+  };
+  out.experiments = mergeRecords(local.experiments, remote.experiments);
+  out.exploreIdeas = mergeRecords(local.exploreIdeas, remote.exploreIdeas);
+
+  // Insights are a replace-on-analysis snapshot. Keep the newest generated
+  // set, while feedback lives separately and merges per insight id.
+  const insightSetAt = insights => (Array.isArray(insights) ? insights : []).reduce(
+    (latest, insight) => (insight.generatedAt || "") > latest ? insight.generatedAt : latest,
+    ""
+  );
+  out.insights = insightSetAt(local.insights) > insightSetAt(remote.insights)
+    ? (Array.isArray(local.insights) ? local.insights : [])
+    : (Array.isArray(remote.insights) ? remote.insights : []);
+  out.insightFeedback = {};
+  const feedbackIds = new Set([
+    ...Object.keys(local.insightFeedback || {}),
+    ...Object.keys(remote.insightFeedback || {}),
+  ]);
+  for (const id of feedbackIds) {
+    out.insightFeedback[id] = newerDated(local.insightFeedback?.[id], remote.insightFeedback?.[id]);
+  }
+  if (!feedbackIds.size) delete out.insightFeedback;
+  out.interestProfile = newerDated(local.interestProfile, remote.interestProfile);
+  if (!out.interestProfile) delete out.interestProfile;
 
   // collapsed and pendingMemory: take whichever side has more recent overall
   // updatedAt. For pendingMemory this handles the race where the user
@@ -1005,6 +1125,58 @@ function fmtDuration(min) {
 }
 const ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ESC_MAP[c]); }
+function inlineMarkdown(text) {
+  const links = [];
+  const tokenized = String(text || "").replace(
+    /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+    (_, label, url) => {
+      const token = `@@LINK${links.length}@@`;
+      links.push(`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`);
+      return token;
+    }
+  );
+  let safe = esc(tokenized)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  links.forEach((link, index) => { safe = safe.replace(`@@LINK${index}@@`, link); });
+  return safe;
+}
+function renderSafeMarkdown(markdown) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  let html = "";
+  let list = null;
+  const closeList = () => {
+    if (list) html += `</${list}>`;
+    list = null;
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { closeList(); continue; }
+    if (/^#\s+/.test(line)) continue; // card already renders the note title
+    const h2 = line.match(/^##\s+(.+)/);
+    const h3 = line.match(/^###\s+(.+)/);
+    const quote = line.match(/^>\s*(.+)/);
+    const bullet = line.match(/^[-*]\s+(.+)/);
+    const numbered = line.match(/^\d+\.\s+(.+)/);
+    if (h2 || h3 || quote) closeList();
+    if (h2) html += `<h4>${inlineMarkdown(h2[1])}</h4>`;
+    else if (h3) html += `<h5>${inlineMarkdown(h3[1])}</h5>`;
+    else if (quote) html += `<blockquote>${inlineMarkdown(quote[1])}</blockquote>`;
+    else if (bullet) {
+      if (list !== "ul") { closeList(); list = "ul"; html += "<ul>"; }
+      html += `<li>${inlineMarkdown(bullet[1])}</li>`;
+    } else if (numbered) {
+      if (list !== "ol") { closeList(); list = "ol"; html += "<ol>"; }
+      html += `<li>${inlineMarkdown(numbered[1])}</li>`;
+    } else {
+      closeList();
+      html += `<p>${inlineMarkdown(line)}</p>`;
+    }
+  }
+  closeList();
+  return html;
+}
 function daysAgo(iso) {
   if (!iso) return 999;
   return Math.floor((Date.now() - new Date(iso).getTime()) / (24*3600*1000));
@@ -1320,11 +1492,172 @@ function renderOngoing() {
   }
   root.innerHTML = html;
 }
+
+function sourceBookmarkLinks(ids) {
+  return (ids || []).slice(0, 6).map((id, index) =>
+    `<a href="https://x.com/i/web/status/${encodeURIComponent(id)}" target="_blank" rel="noopener">Source ${index + 1}</a>`
+  ).join("");
+}
+
+function renderConcepts() {
+  const profileRoot = document.getElementById("interest-profile");
+  const profile = state.interestProfile;
+  if (profile?.summary) {
+    const themes = Array.isArray(profile.topThemes) ? profile.topThemes : [];
+    profileRoot.style.display = "block";
+    profileRoot.innerHTML = `
+      <h3>Your interest profile</h3>
+      <p>${esc(profile.summary)}</p>
+      ${themes.length ? `<div class="theme-chips">${themes.map(theme => `<span class="theme-chip">${esc(theme)}</span>`).join("")}</div>` : ""}`;
+  } else {
+    profileRoot.style.display = "none";
+    profileRoot.innerHTML = "";
+  }
+
+  const root = document.getElementById("concept-list");
+  const insights = [...(state.insights || [])]
+    .filter(insight => state.insightFeedback?.[insight.id]?.status !== "dismissed")
+    .sort((a, b) => (b.generatedAt || "").localeCompare(a.generatedAt || ""));
+  if (!insights.length) {
+    root.innerHTML = `<div class="next-empty">No concept syntheses are synced yet. The bookmark analyzer will populate this view.</div>`;
+    return;
+  }
+
+  const feedbackLabels = { useful: "Marked useful", not_useful: "Marked not useful" };
+  root.innerHTML = insights.map(insight => {
+    const feedback = state.insightFeedback?.[insight.id];
+    return `
+      <article class="concept-card">
+        <div class="concept-meta">
+          <span>${Number(insight.sourceCount) || (insight.sourceBookmarkIds || []).length} sources</span>
+          ${feedbackLabels[feedback?.status] ? `<span class="feedback-badge">${feedbackLabels[feedback.status]}</span>` : ""}
+        </div>
+        <h3>${esc(insight.title)}</h3>
+        <div class="concept-theme">${esc(insight.theme || insight.summary || "")}</div>
+        ${insight.content ? `<details><summary>Read full concept</summary><div class="concept-body">${renderSafeMarkdown(insight.content)}</div></details>` : ""}
+        <div class="source-links">${sourceBookmarkLinks(insight.sourceBookmarkIds)}</div>
+        <div class="feedback-actions">
+          <button class="positive ${feedback?.status === "useful" ? "selected" : ""}" data-insight-action="useful" data-id="${esc(insight.id)}">Useful</button>
+          <button class="negative ${feedback?.status === "not_useful" ? "selected" : ""}" data-insight-action="not_useful" data-id="${esc(insight.id)}">Not useful</button>
+          <button data-insight-action="dismissed" data-id="${esc(insight.id)}">Dismiss</button>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function suggestionCard(item, kind) {
+  const isExperiment = kind === "experiment";
+  return `
+    <article class="experiment-card">
+      <div class="experiment-meta">
+        <span>${isExperiment ? "Experiment" : "Explore idea"}</span>
+        ${item.timeToTry ? `<span>· ${esc(item.timeToTry)}</span>` : ""}
+      </div>
+      <h3>${esc(item.title)}</h3>
+      ${item.why ? `<div class="why">${esc(item.why)}</div>` : ""}
+      ${item.hypothesis ? `<div class="hypothesis">${esc(item.hypothesis)}</div>` : ""}
+      ${Array.isArray(item.steps) && item.steps.length ? `<ol>${item.steps.map(step => `<li>${esc(step)}</li>`).join("")}</ol>` : ""}
+      ${item.firstAction ? `<div class="first-action"><b>First move:</b> ${esc(item.firstAction)}</div>` : ""}
+      <div class="source-links">${sourceBookmarkLinks(item.sourceBookmarkIds)}</div>
+      <div class="feedback-actions">
+        ${isExperiment ? `
+          <button class="positive" data-suggestion-kind="experiment" data-suggestion-action="tried_liked" data-id="${esc(item.id)}">Tried — useful</button>
+          <button class="negative" data-suggestion-kind="experiment" data-suggestion-action="tried_disliked" data-id="${esc(item.id)}">Tried — not useful</button>` : `
+          <button class="positive" data-suggestion-kind="idea" data-suggestion-action="interested" data-id="${esc(item.id)}">Worth exploring</button>
+          <button class="negative" data-suggestion-kind="idea" data-suggestion-action="not_interested" data-id="${esc(item.id)}">Not for me</button>`}
+        <button data-suggestion-kind="${kind}" data-suggestion-action="dismissed" data-id="${esc(item.id)}">Dismiss</button>
+      </div>
+    </article>`;
+}
+
+let experimentDisplayLimit = 8;
+let ideaDisplayLimit = 6;
+
+function renderExperiments() {
+  const experiments = [...(state.experiments || [])]
+    .filter(item => (item.status || "suggested") === "suggested")
+    .sort((a, b) => (b.suggestedAt || "").localeCompare(a.suggestedAt || ""));
+  const ideas = [...(state.exploreIdeas || [])]
+    .filter(item => (item.status || "suggested") === "suggested")
+    .sort((a, b) => (b.suggestedAt || "").localeCompare(a.suggestedAt || ""));
+  document.getElementById("experiment-list").innerHTML = experiments.length
+    ? experiments.slice(0, experimentDisplayLimit).map(item => suggestionCard(item, "experiment")).join("")
+    : `<div class="next-empty">No untried experiments right now.</div>`;
+  const moreExperiments = document.getElementById("more-experiments");
+  moreExperiments.style.display = experiments.length > experimentDisplayLimit ? "block" : "none";
+  moreExperiments.textContent = `Show more experiments (${Math.max(0, experiments.length - experimentDisplayLimit)} remaining)`;
+  document.getElementById("idea-list").innerHTML = ideas.length
+    ? ideas.slice(0, ideaDisplayLimit).map(item => suggestionCard(item, "idea")).join("")
+    : `<div class="next-empty">No unexplored ideas right now.</div>`;
+  const moreIdeas = document.getElementById("more-ideas");
+  moreIdeas.style.display = ideas.length > ideaDisplayLimit ? "block" : "none";
+  moreIdeas.textContent = `Show more ideas (${Math.max(0, ideas.length - ideaDisplayLimit)} remaining)`;
+
+  const history = [
+    ...(state.experiments || []).filter(item => item.status && item.status !== "suggested").map(item => ({ ...item, kind: "experiment" })),
+    ...(state.exploreIdeas || []).filter(item => item.status && item.status !== "suggested").map(item => ({ ...item, kind: "idea" })),
+  ].sort((a, b) => (b.updatedAt || b.triedAt || "").localeCompare(a.updatedAt || a.triedAt || ""));
+  const statusLabels = {
+    tried_liked: "Tried · useful",
+    tried_disliked: "Tried · not useful",
+    interested: "Worth exploring",
+    not_interested: "Not for me",
+    dismissed: "Dismissed",
+  };
+  document.getElementById("experiment-history").innerHTML = history.length ? `
+    <details class="feedback-history">
+      <summary>Feedback history (${history.length})</summary>
+      ${history.map(item => `
+        <div class="history-row">
+          <span><b>${esc(item.title)}</b> · ${esc(statusLabels[item.status] || item.status)}${item.outcome ? ` — ${esc(item.outcome)}` : ""}</span>
+          <button data-suggestion-kind="${item.kind}" data-suggestion-action="suggested" data-id="${esc(item.id)}">Restore</button>
+        </div>`).join("")}
+    </details>` : "";
+}
+
+function setInsightFeedback(id, status) {
+  const now = new Date().toISOString();
+  state.insightFeedback = {
+    ...(state.insightFeedback || {}),
+    [id]: { status, updatedAt: now },
+  };
+  state.updatedAt = now;
+  saveLocal(state); pushDebounced(); renderConcepts(); updateCounts();
+}
+
+function setSuggestionStatus(kind, id, status) {
+  const key = kind === "experiment" ? "experiments" : "exploreIdeas";
+  const current = state[key] || [];
+  const target = current.find(item => item.id === id);
+  if (!target) return;
+  let outcome = target.outcome || null;
+  if (status === "tried_liked" || status === "tried_disliked") {
+    const response = prompt("What happened? One sentence is enough. Leave blank if you just want to record the rating.", outcome || "");
+    if (response === null) return;
+    outcome = response.trim() || null;
+  }
+  const now = new Date().toISOString();
+  state[key] = current.map(item => item.id === id ? {
+    ...item,
+    status,
+    outcome: status === "suggested" ? null : outcome,
+    triedAt: status.startsWith("tried_") ? now : (status === "suggested" ? null : item.triedAt || null),
+    updatedAt: now,
+  } : item);
+  state.updatedAt = now;
+  saveLocal(state); pushDebounced(); renderExperiments(); updateCounts();
+}
+
 function updateCounts() {
   document.getElementById("count-next").textContent = upNextItems(99).length;
   document.getElementById("count-path").textContent = sequencedItems().length;
   document.getElementById("count-backlog").textContent = allItems().length;
   document.getElementById("count-ongoing").textContent = ongoingItems().length;
+  document.getElementById("count-concepts").textContent = (state.insights || [])
+    .filter(insight => state.insightFeedback?.[insight.id]?.status !== "dismissed").length;
+  document.getElementById("count-experiments").textContent = [
+    ...(state.experiments || []), ...(state.exploreIdeas || []),
+  ].filter(item => (item.status || "suggested") === "suggested").length;
   const last = CHANGELOG[CHANGELOG.length - 1];
   if (last) document.getElementById("sub").textContent = `Curated path. Last update ${last.date}.`;
 }
@@ -1483,7 +1816,7 @@ function render() {
   if (selectedPath && selectedPath.value !== state.activePathId) selectedPath.value = state.activePathId;
   document.getElementById("path-description").textContent = activePath().description;
   renderRecallBanner(); renderReviewStatus(); renderKnowledgeProfile();
-  renderUpNext(); renderPath(); renderBacklog(); renderOngoing(); updateCounts();
+  renderUpNext(); renderPath(); renderConcepts(); renderExperiments(); renderBacklog(); renderOngoing(); updateCounts();
 }
 
 // ============= Tabs + UI =============
@@ -1508,6 +1841,24 @@ document.getElementById("tabs").addEventListener("click", e => {
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   tab.classList.add("active");
   document.getElementById("view-" + tab.dataset.view).classList.add("active");
+});
+document.getElementById("concept-list").addEventListener("click", e => {
+  const button = e.target.closest("button[data-insight-action]");
+  if (!button) return;
+  setInsightFeedback(button.dataset.id, button.dataset.insightAction);
+});
+document.getElementById("view-experiments").addEventListener("click", e => {
+  const button = e.target.closest("button[data-suggestion-action]");
+  if (!button) return;
+  setSuggestionStatus(button.dataset.suggestionKind, button.dataset.id, button.dataset.suggestionAction);
+});
+document.getElementById("more-experiments").addEventListener("click", () => {
+  experimentDisplayLimit += 8;
+  renderExperiments();
+});
+document.getElementById("more-ideas").addEventListener("click", () => {
+  ideaDisplayLimit += 6;
+  renderExperiments();
 });
 ["search","filter-cat","filter-type","filter-status","sort"].forEach(id => {
   document.getElementById(id).addEventListener(id === "search" ? "input" : "change", renderBacklog);

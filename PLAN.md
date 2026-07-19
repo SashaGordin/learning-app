@@ -41,7 +41,7 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 1.2 PWA: mark-done modal captures one-sentence takeaway + 1–5 star rating. Cmd/Ctrl+Enter saves, Esc cancels. Inline note rendering on path and backlog. Color-based dim for completed items so takeaway cards stay vivid. SW cache `v2`.
 - 1.3 Historical: brief personalization was built, then removed with the newsletter jobs on 2026-07-18. The reusable state loader remains for memory and bookmark workflows.
 
-**Phase 2 — Evidence-based spaced recall. 🟡 Built; awaiting first explanation/grade.**
+**Phase 2 — Evidence-based spaced recall. 🟡 Built; installed-PWA validation deferred.**
 - `cron/memory.js` runs at 6:25 AM weekdays, picks one due Done, asks Claude (no web search) for one active-recall question plus a reference answer/key-point rubric, and writes to `state.pendingMemory`. Idempotent. `--force` flag for testing.
 - The PWA's confidence buttons open a required free-text explanation modal. Submission appends a pending record to `state.memoryReviews[]`; the browser does not advance the schedule itself.
 - `cron/grade_memory.js` runs every two minutes, grades the oldest pending explanation, stores feedback and knowledge evidence, updates per-item mastery plus `state.learnerProfile`, applies the 1/7/30/90/180 cadence from the verdict, and writes path-specific recommendations.
@@ -50,7 +50,7 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - `cron/scheduler.js` runs both generation and grading schedules.
 - `cron/lib/state.js` gained `saveState` (with optimistic-concurrency via `if_unchanged_since`) and `getItemById`. Hidden `__rowUpdatedAt` on loaded state for the OCC token.
 - `cron/lib/claude.js` got a `noSearch: true` option to omit the web_search tool.
-- Initial review remains +1 day (Ebbinghaus). SW cache `v6`; navigations are network-first and Cloudflare/Caddy explicitly serve `sw.js` without caching so interaction changes cannot run one version behind after deployment.
+- Initial review remains +1 day (Ebbinghaus). SW cache `v7`; navigations are network-first and Cloudflare/Caddy explicitly serve `sw.js` without caching. Sasha chose to move on after the installed PWA still exhibited stale state; do not make that cache edge case the active priority unless it becomes materially blocking.
 
 **Phase 3 — Active-learning audio. ⏳ Deferred.**
 - No TTS news brief. Any audio experiment must chain recall question → one rotating concept → experiment-of-the-day → one open question.
@@ -66,16 +66,16 @@ Six phases planned. Tasks 1–13 in the task list map 1:1 to the sub-items below
 - 5.1: New `build` item type. `cron/build_challenge.js` creates a 60–90 min challenge matched to recent Dones and surfaces it in the PWA. Separate `build_journal` array in state.
 - 5.2: PWA thumbs up/down on recommendations/experiments → small `feedback` table. Feedback should tune subsequent in-app recommendations.
 
-**Phase 6 — X bookmarks integration. 🟡 6.1/6.2/6.2.5/6.3 done; 6.4 pending.**
+**Phase 6 — X bookmarks integration. 🟡 6.1/6.2/6.2.5/6.3 V2 done; 6.4 pending.**
 - 6.1: 🟡 Built, but the archive bootstrap path is moot for X. `cron/import_bookmarks.js` works end-to-end (verified against a synthetic fixture), but X archives don't include bookmarks — verified 2026-05-24 by inspecting the actual archive. Script retained for any other JSON dump source. Refactored 2026-05-24 onto shared `cron/lib/tag.js` (no behavior change).
 - 6.2: ✅ Built and live. **Architecture pivot from the original plan:** Claude-in-Chrome is a browser-side extension paired with a Claude.ai session — it cannot be driven from the headless cron container. So the scrape is **manual**: drive a Claude.ai session via the Chrome extension at x.com/i/bookmarks, dump bookmarks as JSON (file-download channel, not pasted into chat — Claude-in-Chrome's response filter blocks `key=value` substrings such as image URL query params and tweet bodies containing `--flag=value`), drop the file at `./data/x_bookmarks_NNN.json`, then `docker compose exec cron node sync_bookmarks.js --file …`. The cron-side script normalizes, dedupes vs the existing `bookmarks` table, tags new items via shared `tagBatch`, bulk-upserts as `source='x'`, and bumps `state.lastBookmarkSync` via `saveState` with OCC. **Scope deferred:** no `scheduler.js` entry (sync is manual), no PWA "Sync now" button (waits for 6.3 Interest tab). **Fields preserved in `content` as markers** (no schema migration): `[truncated]` when "Show more" was visible, `[link: title — desc | url]` for external link cards with a real title, `[image_url: <pbs.twimg.com URL>]` per attached image — the last of which is the hook for the next-session image-vision enrichment. Image-URL markers are stripped before tagging (waste tokens) but stay in the stored row. Verified 2026-05-24: 180 real bookmarks ingested, 77 with image markers, 44 truncated, 143/180 tagged. The `cron/lib/tag.js` `normalize()` and `tagBatch()` are the load-bearing shared pieces; do not duplicate them when 6.3/6.4 need parsing.
 - 6.3: ✅ V1.5 built and run (verified on 180 bookmarks). **Architecture pivot from the original plan:** bookmarks are *not* displayed in the PWA — they're context data in the codebase. The pipeline has two passes, both inside `cron/analyze_bookmarks.js` (manual, like `sync_bookmarks.js`):
   - **Pass 1 — Per-bookmark classification.** Fresh bookmarks (those with `bookmarked_at > state.lastBookmarkAnalysisAt`) go through Claude (`noSearch`, batches of 10) into four buckets: `experiment` (concrete 30-90 min dev-workflow tries with title/why/steps/timeToTry), `explore_idea` (weekend-scale ideas with hypothesis/firstAction), `deep_learn` (logged this run, persisted as cluster sources via the synthesis pass — no longer a transient bucket), `noise` (dropped). Per-item dedup by `hash(title + sortedSourceBookmarkIds)`. Writes to `state.experiments[]` / `state.exploreIdeas[]`.
-  - **Pass 2 — Cluster + insight synthesis.** All classified non-noise bookmarks get clustered by theme via Claude (min 3 sources/cluster, target 6-12 clusters, cap at 12 to control cost). For each cluster, a second Claude call produces a markdown insight document (`max_tokens: 4096` — the 2048 default truncated the largest 10+ source clusters): one-line meta-pattern in italics, 200-350 word cross-cutting insight, "what this means for how you work" with concrete moves, source-bookmark bullets with one-liners each, 2-4 open questions. Files land at `concepts/<slug>.md` (gitignored, bind-mounted into the cron container via `docker-compose.yml`). After write, the script sweeps `concepts/` and unlinks any `.md` not referenced by this run's `state.insights` (clusters shift slightly between runs and otherwise leave orphans). State carries `state.insights[]` with `{id, title, theme, summary, filePath, sourceBookmarkIds, sourceCount, generatedAt, surfacedAt}`, fully replaced each synthesis run — the `.md` files are the persistent artifact, the state array is the brief-injection cursor. Flag `--skip-synthesis` disables Pass 2 for cheaper iteration.
-  - **Profile refresh.** Final step: regenerates `state.interestProfile` (Claude-generated ~200-word summary + topThemes from the last 50 bookmarks plus any `tried_liked`/`tried_disliked` outcome history).
-  - **Former brief integration.** Weekly-email rendering was built and verified, then retired with `weekly_brief.js` on 2026-07-18. The underlying `state.insights`, `state.experiments`, `state.exploreIdeas`, and `state.interestProfile` data remain intact and now need a PWA surface.
+  - **Pass 2 — Cluster + insight synthesis.** All classified non-noise bookmarks get clustered by theme via Claude (min 3 sources/cluster, target 6-12 clusters, cap at 12 to control cost). For each cluster, a second Claude call produces a markdown insight document (`max_tokens: 4096` — the 2048 default truncated the largest 10+ source clusters): one-line meta-pattern in italics, 200-350 word cross-cutting insight, "what this means for how you work" with concrete moves, source-bookmark bullets with one-liners each, 2-4 open questions. Files land at `concepts/<slug>.md` (gitignored, bind-mounted into the cron container via `docker-compose.yml`) and the same private content lands in `state.insights[].content` for the PWA. After write, the script sweeps orphan files. Flag `--skip-synthesis` disables Pass 2 for cheaper iteration.
+  - **Profile refresh.** Final step regenerates `state.interestProfile` from the last 50 bookmarks plus experiment outcomes, idea reactions, and concept usefulness feedback.
+  - **V2 PWA surface (2026-07-19).** Concepts renders the full private Markdown, profile themes, sources, and useful/not-useful/dismiss actions. Experiments renders bounded batches of concrete tests and larger ideas with tried-useful/tried-not-useful/interested/not-interested/dismiss actions, optional outcome notes, feedback history, and restore. Collection merges are ID-aware. The 11 legacy concept files were backfilled with `sync_concepts_to_state.js`; missing classifications were rebuilt from 180 bookmarks into 49 experiments, 28 ideas, and a 12-theme profile.
   - **Verified 2026-05-26:** Ran on the 180-bookmark corpus. Classification distribution: ~38-43 experiment / ~22-23 explore_idea / ~16-18 deep_learn / ~99-101 noise (~55% noise rate is correct — X is mostly noise; bumping that down would force false positives). The synthesis pass produced 11 clusters spanning Claude Code internals, agent skills, autonomous coding loops, official curricula, security, personal-OS patterns, open models, solo-operator businesses, agent tooling, IDE rules. All 11 insight files completed cleanly with `stop=end_turn` after the `max_tokens` bump. Brief-block preview confirmed injection works end-to-end.
-  - **Scope deferred to 6.3 V2:** PWA UI for marking experiments tried/liked/disliked; explicit feedback loop driving profile updates; "Sync now" button (sync stays manual). The original "Sync now" + Interest-tab framing is fully scrapped.
+  - **Remaining 6.3 scope:** semantic dedup/periodic cleanup for near-duplicate suggestions and, only if useful later, a manual sync affordance. The original "Sync now" + raw Interest-tab framing is fully scrapped.
 - 6.4: ⏳ Pending. Curator inspects the interest stream weekly and proposes foundational items that resolve recurring themes. `memory.js` can surface a related bookmark when reviewing a mastery item.
 
 **Phase 6.2.5 — Image vision enrichment for X bookmarks. ✅ Built and run.**
@@ -97,7 +97,7 @@ Fresh-eyes review after Phase 6.3 V1.5 landed. Captured here so the gaps don't g
 
 - **Resolved 2026-07-18: newsletter briefs retired.** `daily_brief.js` and `weekly_brief.js` were deleted, their schedules and prompt helpers removed, and memory is now explicitly PWA-first.
 
-- **Concept `.md` files have no product surface.** `cron/analyze_bookmarks.js` writes synthesis docs to `concepts/<slug>.md`, but those files are gitignored and host-only. With weekly email retired, the correct fix is an in-app Concepts surface backed by `state.insights`, with the full notes made reachable from the PWA.
+- **Resolved 2026-07-19: Concepts + Experiments are in-app.** Private full notes are embedded in sync-protected state rather than published as static files. Feedback is persisted and included in future profile refreshes.
 
 - **Phase 2 evidence loop upgraded 2026-07-19.** The first real click exposed a product flaw: confidence alone advanced the schedule without proving recall. That transition has been removed. A fresh real run selected `karp-software30` and persisted a question, reference answer, and four-point rubric. The explanation modal, asynchronous grader, mastery/profile updates, feedback, review scheduling, and path recommendations are built; the remaining verification is Sasha's first real explanation and resulting grade.
 
@@ -105,7 +105,7 @@ Fresh-eyes review after Phase 6.3 V1.5 landed. Captured here so the gaps don't g
 
 - **Resolved 2026-07-18: brief prompt reproduction removed** with the newsletter jobs.
 
-- **`state.experiments[]` and `state.exploreIdeas[]` accumulate forever.** Dedup is exact-title-hash and there is no in-app lifecycle yet, so stale candidates will dominate as the corpus grows. Phase 6.3 V2 needs outcome controls plus semantic dedup or periodic cleanup.
+- **Partially resolved 2026-07-19: suggestion lifecycle exists.** Outcome controls, dismissal, history, restore, and profile feedback are built. Exact-title hashing can still accumulate semantic near-duplicates, so periodic cleanup remains.
 
 ### Candidate amendments (new ideas worth committing on)
 
@@ -123,25 +123,23 @@ Fresh-eyes review after Phase 6.3 V1.5 landed. Captured here so the gaps don't g
 
 This supersedes the original newsletter-oriented ordering below.
 
-1. **Complete the first evidence-based Phase 2 response.** Open the PWA, answer the pending `karp-software30` recall in your own words, then verify the grade, reinforcement, mastery profile, next review, and any path adjustment appear.
-2. **Build in-app Concepts + Experiments surfaces.** Make the useful bookmark outputs visible without producing another feed or newsletter.
-3. **Phase 6.4 — curator reads `state.insights` + `state.interestProfile` + concept-note open questions.** This is the load-bearing wire between interest and mastery.
-4. **Add experiment outcome controls and state cleanup.** Tried/liked/disliked/dismissed should tune the profile and prevent stale accumulation.
+1. **Phase 6.4 — curator reads `state.insights` + `state.interestProfile` + concept-note open questions.** This is now the load-bearing wire between interest and mastery.
+2. **Add semantic suggestion cleanup.** Outcome controls are built; prevent near-duplicate experiments/ideas from accumulating across runs.
+3. **Build-challenge loop.** Turn strong concepts and positive experiment outcomes into 60–90 minute applied challenges.
+4. **Revisit Phase 2 installed-PWA behavior only if it becomes materially blocking.** The evidence architecture is built; stale-client debugging is explicitly deferred.
 5. **Only then reassess active-learning audio.** It must be interactive and concept/recall-driven, never a spoken news brief.
 
 ## Open items / what to do next
 
 The "Revised priority order" in the Audit section above is the current sequence. The numbered items below preserve the original operational detail (commands, expected outputs) for the still-relevant work — read both.
 
-1. **Verify the first evidence-based Phase 2 response. 🟡 Awaiting Sasha.** The real rubric-backed question for `karp-software30` is persisted and should appear in the yellow banner. Pick the confidence that feels right, explain the concept in your own words, and wait up to two minutes. Confirm that feedback, reinforcement, mastery/profile evidence, `nextReviewAt`, and any recommended next item arrive. Do not use a synthetic answer: this first record should represent real knowledge.
+1. **Phase 6.4. ⏳ Pending.** Curator inspects `state.insights`, `state.interestProfile`, and concept open questions to propose foundational Evergreens.
 
-2. **Build a PWA Concepts + Experiments surface.** The synthesis pass produced 11 insights plus experiment/idea state, but the retired weekly brief was their only presentation layer. Show these inside the product with explicit tried/liked/disliked/dismissed actions.
+2. **Semantic suggestion cleanup.** Consolidate near-duplicate experiment/idea titles before appending future analysis results. Empty-content bookmarks remain an upstream scrape gap.
 
-3. **Phase 6.3 V2 (deferred).** PWA UI to mark experiments tried/liked/disliked, Resend inbound webhook for email-reply feedback (Phase 5.2 territory), explicit feedback loop driving profile-personalization (so future analyses surface items resembling things he liked), state-bloat cleanup (after several runs `state.experiments` accumulates near-duplicates with slightly different titles — semantic dedup or periodic sweep). Empty-content bookmarks (~21% of corpus, all scrape gaps where X exposed no body text) are a known noise floor — fix is upstream in the scrape, not in classification.
+3. **Build challenge loop.** Generate applied work from demonstrated gaps, useful concepts, and liked experiments.
 
-4. **Phase 6.4. ⏳ Pending.** Curator inspects bookmarks weekly and proposes foundational Evergreens. The synthesis pass's `deep_learn` cluster sources are the natural input.
-
-5. **Active-learning audio is deferred.** Do not start until the same concepts, experiments, and response loop work in the PWA. No news-summary component.
+4. **Active-learning audio is deferred.** No news-summary component.
 
 ## Phase 6.2 architecture (locked, for context)
 
@@ -165,14 +163,15 @@ These are specific to this redesign and not in CLAUDE.md.
 - **Per-item memory fields live in JSONB.** `completedAt`, `note`, `rating`, `lastReviewedAt`, `nextReviewAt`, `reviewStep`, `evergreen`, `rereadEvery`, `stream`, `source`, `sourceUrl`, `tags`, `promotedAt` all sit inside each `state.items[id]` value. No schema migration needed when adding more.
 - **The `state.pendingMemory` shape.** `{ itemId, question, generatedAt (iso), generatedFor (yyyy-mm-dd), reviewedNoteAt (iso) }`. The PWA renders it until the user responds.
 - **Phase 6.3 state shapes (top-level keys, all in JSONB).**
-  - `state.experiments[]` — `{ id (exp_<hash>), title, why, steps[], timeToTry, sourceBookmarkIds[], status: "suggested"|"tried_liked"|"tried_disliked"|"dismissed", suggestedAt, triedAt, outcome }`. Appended (deduped by id) per run. V2 will add explicit-feedback transitions.
-  - `state.exploreIdeas[]` — same shape minus `steps`/`timeToTry`, plus `hypothesis`/`firstAction`.
+  - `state.experiments[]` — `{ id (exp_<hash>), title, why, steps[], timeToTry, sourceBookmarkIds[], status: "suggested"|"tried_liked"|"tried_disliked"|"dismissed", suggestedAt, triedAt, outcome, updatedAt }`. Appended/deduped by id; PWA outcomes feed later profiles.
+  - `state.exploreIdeas[]` — same shape minus `steps`/`timeToTry`, plus `hypothesis`/`firstAction`; statuses add `interested` / `not_interested`.
   - `state.interestProfile` — `{ summary (~200 words), topThemes[8-12], generatedAt }`. Replaced each run.
-  - `state.insights[]` — `{ id (ins_<clusterHash>), title, theme, summary, filePath ("concepts/<slug>.md"), sourceBookmarkIds[], sourceCount, generatedAt, surfacedAt }`. **Fully replaced** each synthesis run; it is now the cursor for a future in-app Concepts surface.
+  - `state.insights[]` — `{ id (ins_<clusterHash>), title, theme, summary, content, filePath ("concepts/<slug>.md"), sourceBookmarkIds[], sourceCount, generatedAt, surfacedAt }`. **Fully replaced** each synthesis run and rendered in-app; `content` stays behind the sync code rather than in public static assets.
+  - `state.insightFeedback[id]` — `{ status: "useful"|"not_useful"|"dismissed", updatedAt }`; kept separate so replace-on-analysis insights cannot erase feedback.
   - `state.lastBookmarkAnalysisAt` — ISO timestamp; the analyze run filters bookmarks newer than this. `--since YYYY-MM-DD` overrides.
 - **Bookmark synthesis is `analyze_bookmarks.js` two-pass.** Classification first (per-bookmark, batches of 10), then synthesis (cluster all non-noise items via Claude into 6-12 themes, generate one `.md` per cluster via a second Claude call with `max_tokens: 4096` — the 2048 default truncates 10+ source clusters). The script auto-cleans orphan `concepts/*.md` files at the end (clusters shift slightly between runs and otherwise leave stale files). Use `--skip-synthesis` for cheap iteration on the classification prompts alone.
 - **`./concepts` is bind-mounted** into the cron container as `/app/concepts` via `docker-compose.yml`. New volume mounts require `docker compose up -d cron` (or full restart) to take effect — a `docker compose restart cron` won't apply mount changes.
-- **`LEARNING_SYNC_ID` in `.env`.** Required for cron to read state. Sasha's value: `gdukt-wb8dc-rwfk2-yzyw6`. If `.env` doesn't have it on the host, `state.js` degrades gracefully.
+- **`LEARNING_SYNC_ID` in `.env`.** Required for cron to read state. Keep the value out of committed documentation because the sync code is the row's only authorization secret. If `.env` doesn't have it on the host, `state.js` degrades gracefully.
 
 ## Deployment cheatsheet
 

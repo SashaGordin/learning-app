@@ -7,6 +7,7 @@
   "scripts": {
     "memory": "node memory.js",
     "grade-memory": "node grade_memory.js",
+    "sync-concepts": "node sync_concepts_to_state.js",
     "curator": "node curator.js",
     "scheduler": "node scheduler.js"
   },

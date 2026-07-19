@@ -2,7 +2,7 @@
 
 A personal learning-curation system with three pieces:
 
-1. **PWA frontend** (`frontend/`) — multiple sequenced learning paths over one shared resource backlog. Installable on iOS / Android home screens.
+1. **PWA frontend** (`frontend/`) — multiple sequenced learning paths, bookmark-derived Concepts, and actionable Experiments over one synced learning state. Installable on iOS / Android home screens.
 2. **Docker stack** (`docker-compose.yml`) — Caddy serves the local copy at `http://localhost:8080`, and a cron container generates spaced-recall questions and runs the weekly backlog curator.
 3. **Supabase backend** — a single table (`learning_state`) keyed by a sync code. Phone and laptop share the same row so progress stays in sync.
 
@@ -21,6 +21,18 @@ The original `tier`, `order`, and `prereqs` fields in `SEED` define the backward
 | `curator.js` | Sunday 8:00 PM | Adds 0-3 high-signal items to the backlog SEED, prunes stale ones | Email summary + rewrites `frontend/index.html` |
 
 Daily and weekly newsletter briefs were intentionally removed: they duplicated a normal AI newsletter without improving the learning loop. The schedules are defined in `cron/scheduler.js`.
+
+## Concepts and experiments
+
+The Concepts tab renders the private cross-cutting notes created by `cron/analyze_bookmarks.js`; full Markdown is stored inside the sync-protected state rather than published as static Cloudflare files. The Experiments tab shows concrete tests and larger ideas, initially in bounded batches rather than as an endless feed.
+
+Feedback actions persist into the shared state: concepts can be marked useful/not useful/dismissed, experiments can be recorded as tried-useful/tried-not-useful/dismissed with an optional outcome note, and ideas can be marked worth exploring/not for me/dismissed. Future bookmark-analysis runs include these signals when refreshing the interest profile.
+
+For concept files generated before inline content was added:
+
+```bash
+docker compose exec cron node sync_concepts_to_state.js
+```
 
 ## One-time setup
 
@@ -134,6 +146,7 @@ docker compose logs -f cron
 # Manually trigger recall or a curator run
 docker compose exec cron node memory.js --force
 docker compose exec cron node grade_memory.js
+docker compose exec cron node sync_concepts_to_state.js
 docker compose exec cron node curator.js
 
 # Restart after editing scheduler.js or prompts
@@ -163,6 +176,7 @@ learning-app/
 │   ├── scheduler.js        node-cron — runs recall generation/grading + curator
 │   ├── memory.js           spaced-recall question + rubric generator
 │   ├── grade_memory.js     explanation grader + mastery/path updater
+│   ├── sync_concepts_to_state.js  private concept-note state backfill
 │   ├── curator.js
 │   └── lib/
 │       ├── claude.js       Anthropic API wrapper (uses web_search tool)

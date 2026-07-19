@@ -168,15 +168,15 @@ Bookmarks:
 ${itemsBlock}`;
 }
 
-function buildProfilePrompt(corpus, experiments) {
+function buildProfilePrompt(corpus, suggestions) {
   const corpusBlock = corpus.map(c =>
     `- [${(c.tags || []).join(", ") || "—"}] ${c.snippet}`
   ).join("\n");
 
-  const expBlock = experiments.length
-    ? `EXISTING EXPERIMENT SUGGESTIONS (status reveals preference signal — "tried_liked" is a strong positive, "dismissed" a negative; "suggested" means he hasn't reacted yet):
-${experiments.slice(-25).map(e => `- ${e.title}${e.status && e.status !== "suggested" ? ` (status: ${e.status})` : ""}`).join("\n")}`
-    : "(no experiments tracked yet — this is the first analysis run)";
+  const expBlock = suggestions.length
+    ? `EXISTING EXPERIMENT + IDEA FEEDBACK (status reveals preference signal — "tried_liked" and "interested" are positive; "tried_disliked", "not_interested", and "dismissed" are negative; "suggested" means no reaction yet):
+${suggestions.slice(-35).map(e => `- ${e.title}${e.status && e.status !== "suggested" ? ` (status: ${e.status}${e.outcome ? `; outcome: ${e.outcome}` : ""})` : ""}`).join("\n")}`
+    : "(no experiment or idea feedback tracked yet — this is the first analysis run)";
 
   return `You are writing Sasha's interest profile — a personal context document that captures the SPECIFIC patterns of curiosity in his X bookmarks. This profile guides future learning-path recommendations and curator decisions.
 
@@ -291,8 +291,8 @@ async function classifyBatch(batch, profileText) {
   return parsed;
 }
 
-async function refreshInterestProfile(corpus, experiments) {
-  const prompt = buildProfilePrompt(corpus, experiments);
+async function refreshInterestProfile(corpus, suggestions) {
+  const prompt = buildProfilePrompt(corpus, suggestions);
   let raw;
   try {
     raw = await ask(prompt, { noSearch: true, maxTokens: 2048 });
@@ -434,6 +434,10 @@ async function synthesizeInsights(classified) {
       title: c.title,
       theme: c.theme,
       summary: c.summary,
+      // Keep the private full note inside the sync-protected JSON state. The
+      // host file remains useful for editing/backup, but publishing it as a
+      // static Cloudflare asset would expose bookmark-derived material.
+      content: md,
       filePath,
       sourceBookmarkIds: c.bookmarkIds,
       sourceCount: sources.length,
@@ -573,6 +577,7 @@ async function main() {
           suggestedAt: isoNow,
           triedAt: null,
           outcome: null,
+          updatedAt: isoNow,
         });
       } else if (r.bucket === "explore_idea" && r.explore_idea && typeof r.explore_idea.title === "string") {
         const e = r.explore_idea;
@@ -593,6 +598,7 @@ async function main() {
           suggestedAt: isoNow,
           triedAt: null,
           outcome: null,
+          updatedAt: isoNow,
         });
       } else if (r.bucket === "deep_learn") {
         deepLearnIds.push(b.id);
@@ -629,9 +635,15 @@ async function main() {
     }));
 
   console.log(`[analyze] refreshing interest profile from ${profileCorpus.length} recent bookmarks`);
+  const insightSignals = (state.insights || [])
+    .map(insight => {
+      const feedback = state.insightFeedback?.[insight.id];
+      return feedback?.status ? { title: `Concept: ${insight.title}`, status: feedback.status } : null;
+    })
+    .filter(Boolean);
   const profile = await refreshInterestProfile(
     profileCorpus,
-    [...existingExp, ...newExperiments],
+    [...existingExp, ...newExperiments, ...existingIdeas, ...newIdeas, ...insightSignals],
   );
 
   if (DRY) {

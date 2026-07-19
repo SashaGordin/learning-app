@@ -2,7 +2,7 @@
 // Strategy: network-first for navigations, stale-while-revalidate for assets.
 // Versioned cache so deploys invalidate cleanly.
 
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const CACHE_NAME = `learning-backlog-${CACHE_VERSION}`;
 const SHELL = [
   "./",

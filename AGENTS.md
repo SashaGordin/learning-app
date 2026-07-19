@@ -36,6 +36,7 @@ docker compose down                    # stop everything
 # Manually invoke jobs (inside the cron container)
 docker compose exec cron node memory.js --force
 docker compose exec cron node grade_memory.js
+docker compose exec cron node sync_concepts_to_state.js
 docker compose exec cron node curator.js
 
 # Deploy the PWA — just push. Cloudflare Pages auto-builds from `main`.
@@ -52,6 +53,7 @@ There is no `npm test`, no `npm run lint`, no build step. Iterate by running the
 - **Adding a SEED item by hand** — edit between the `// SEED_START` / `// SEED_END` markers in `frontend/index.html`. Keep the `const SEED = [ ... ];` shape intact so the curator's parser doesn't choke.
 - **Adding a Supabase column or RPC** — schema is not in this repo; use the Supabase MCP tools or dashboard. After schema changes that affect sync, the frontend's `loadFromServer` / `saveToServer` logic in `index.html` (~line 600-640) is the only client.
 - **Adding a new cron job** — add a script under `cron/`, register it in `scheduler.js`, and `docker compose restart cron`. Don't add a `npm` script unless you actually need it; the container's CMD is `node scheduler.js`.
+- **Concept note privacy** — `concepts/*.md` stays gitignored/private. `analyze_bookmarks.js` stores full note content in sync-protected `state.insights[].content`; never copy the notes into public `frontend/` assets.
 
 ## Active redesign — read PLAN.md first
 
