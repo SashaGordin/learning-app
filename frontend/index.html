@@ -48,6 +48,18 @@
   .sync-pill.offline .dot { background: #6b7280; }
   @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:.3} }
 
+  .path-picker {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 14px 0 2px; padding: 10px 12px;
+    background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+  }
+  .path-picker label { font-size: 12px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: .04em; }
+  .path-picker select {
+    padding: 7px 30px 7px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
+    background: white; color: #111827; font: inherit; font-size: 13.5px; font-weight: 600;
+  }
+  .path-picker .path-description { color: #6b7280; font-size: 12.5px; flex: 1; min-width: 220px; }
+
   .tabs { display: flex; gap: 4px; margin: 16px 0 14px; border-bottom: 1px solid #e5e7eb; overflow-x: auto; }
   .tab {
     padding: 8px 14px; cursor: pointer; font-size: 13.5px; font-weight: 500; color: #6b7280;
@@ -320,6 +332,44 @@
   .recall-forgot { border-color: #fca5a5; color: #991b1b; }
   .recall-forgot:hover { background: #fef2f2; }
 
+  .recall-response-modal textarea {
+    width: 100%; min-height: 140px; resize: vertical; padding: 11px 12px;
+    border: 1px solid #d1d5db; border-radius: 9px; font: inherit; line-height: 1.5;
+  }
+  .recall-response-modal textarea:focus { outline: 2px solid #fde68a; border-color: #f59e0b; }
+  .recall-response-question {
+    padding: 10px 12px; background: #fffbeb; border-left: 3px solid #f59e0b;
+    border-radius: 0 8px 8px 0; font-weight: 500; margin: 12px 0 16px;
+  }
+  .recall-response-choice { font-size: 12.5px; color: #6b7280; margin-bottom: 8px; }
+  .recall-response-error { color: #b91c1c; font-size: 12px; min-height: 18px; margin-top: 5px; }
+  .recall-response-modal .submit { background: #111827; color: white; border-color: #111827; flex: 1.5; }
+
+  .review-status {
+    display: none; border-radius: 12px; padding: 14px 16px; margin: 12px 0 16px;
+    border: 1px solid #bfdbfe; background: #eff6ff;
+  }
+  .review-status.show { display: block; }
+  .review-status.correct { border-color: #86efac; background: #ecfdf5; }
+  .review-status.partial { border-color: #fcd34d; background: #fffbeb; }
+  .review-status.incorrect { border-color: #fca5a5; background: #fef2f2; }
+  .review-status h3 { margin: 0 0 6px; font-size: 14px; }
+  .review-status p { margin: 5px 0; font-size: 13px; }
+  .review-status .ideal-answer { margin-top: 9px; padding: 8px 10px; background: rgba(255,255,255,.7); border-radius: 7px; }
+  .review-status button { margin-top: 10px; padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 7px; background: white; cursor: pointer; }
+
+  .knowledge-card {
+    display: none; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 12px;
+    padding: 13px 16px; margin-bottom: 12px;
+  }
+  .knowledge-card.show { display: block; }
+  .knowledge-card h3 { margin: 0 0 5px; font-size: 14px; color: #4c1d95; }
+  .knowledge-card p { margin: 4px 0; font-size: 13px; color: #4b5563; }
+  .knowledge-card .profile-list { margin-top: 7px; font-size: 12.5px; color: #5b21b6; }
+  .next-card.recommended { border-color: #8b5cf6; box-shadow: 0 1px 0 #ede9fe; }
+  .adaptive-tag { color: #6d28d9; background: #ede9fe; border-radius: 999px; padding: 2px 7px; font-size: 11px; font-weight: 600; }
+  .mastery-inline { color: #6d28d9; margin-left: 7px; font-size: 11.5px; font-weight: 600; }
+
   /* Inline takeaway shown on completed items */
   .done-note {
     margin-top: 5px; font-size: 12.5px; color: #374151;
@@ -355,6 +405,12 @@
     </div>
   </header>
 
+  <div class="path-picker">
+    <label for="path-select">Learning path</label>
+    <select id="path-select"></select>
+    <span class="path-description" id="path-description"></span>
+  </div>
+
   <!-- Spaced-recall banner (Phase 2). Shown when state.pendingMemory is set. -->
   <div id="recall-banner" class="recall-banner" style="display:none">
     <div class="recall-head">
@@ -370,6 +426,8 @@
     </div>
   </div>
 
+  <div id="review-status" class="review-status"></div>
+
   <div class="tabs" id="tabs">
     <div class="tab active" data-view="next">Up next<span class="count" id="count-next">0</span></div>
     <div class="tab" data-view="path">Learning path<span class="count" id="count-path">0</span></div>
@@ -378,6 +436,7 @@
   </div>
 
   <div class="view active" id="view-next">
+    <div id="knowledge-card" class="knowledge-card"></div>
     <div class="next-progress" id="next-progress"></div>
     <div id="next-cards"></div>
   </div>
@@ -477,6 +536,22 @@
   </div>
 </div>
 
+<!-- Recall explanation modal: self-assessment is context; the explanation is evidence. -->
+<div class="modal-backdrop" id="recall-response-backdrop">
+  <div class="modal recall-response-modal">
+    <h2>Explain what you remember</h2>
+    <div class="desc">Write the answer in your own words. A partial answer is useful evidence; “I don’t remember” is valid too.</div>
+    <div class="recall-response-choice" id="recall-response-choice"></div>
+    <div class="recall-response-question" id="recall-response-question"></div>
+    <textarea id="recall-response-answer" placeholder="What do you remember? Explain the idea, why it works, or what you’re unsure about."></textarea>
+    <div class="recall-response-error" id="recall-response-error"></div>
+    <div class="modal-actions">
+      <button id="recall-response-cancel">Cancel</button>
+      <button id="recall-response-submit" class="submit">Submit for assessment</button>
+    </div>
+  </div>
+</div>
+
 <div class="install-banner" id="install-banner">
   <span>Add to home screen for the full app experience.</span>
   <div style="display:flex; gap:8px">
@@ -547,6 +622,70 @@ const TIER_META = {
   5: { name: "Deep dives", desc: "Optional internals. Build a GPT, the tokenizer, GPT-2." },
 };
 
+// Learning paths are curriculum views over the shared resource catalog. The
+// original tier/order/prereqs fields remain the default Agentic Engineering
+// placement, so existing items and curator output stay backward-compatible.
+// Additional paths only describe where an existing item belongs in that path;
+// completion, notes, ratings, and recall history remain shared by item id.
+const DEFAULT_PATH_ID = "agentic-engineering";
+const LEARNING_PATHS = [
+  {
+    id: DEFAULT_PATH_ID,
+    name: "Agentic Engineering",
+    description: "The complete path through LLM foundations, agents, Claude Code, and the wider coding-agent ecosystem.",
+    tiers: TIER_META,
+  },
+  {
+    id: "llm-foundations",
+    name: "LLM Foundations",
+    description: "A focused route from the core mental model to building, tokenizing, and training small GPTs.",
+    tiers: {
+      1: { name: "Mental models", desc: "Understand what LLMs are and how the programming model changes." },
+      2: { name: "Build a model", desc: "Turn the concepts into a working transformer implementation." },
+      3: { name: "Training and tokenization", desc: "Go deeper on the machinery behind real language models." },
+    },
+  },
+  {
+    id: "claude-code-mastery",
+    name: "Claude Code Mastery",
+    description: "A practical route through agentic coding patterns, Claude Code, hooks, skills, and MCP tooling.",
+    tiers: {
+      1: { name: "Agentic coding fundamentals", desc: "Build the mental model for agents, MCP, and software as an LLM substrate." },
+      2: { name: "Claude Code essentials", desc: "Learn the core product, workflow, and customization surface." },
+      3: { name: "Build real workflows", desc: "Apply MCP, multi-agent patterns, and working examples." },
+      4: { name: "Stay current", desc: "Track the patterns and releases that change day-to-day practice." },
+    },
+  },
+];
+
+// The default path uses the catalog's legacy tier/order/prereqs fields. These
+// maps define placements for additional paths without duplicating resources.
+const PATH_PLACEMENTS = {
+  "llm-foundations": {
+    "karp-intro-llms":       { tier: 1, order: 10, prereqs: [] },
+    "karp-software30":       { tier: 1, order: 20, prereqs: ["karp-intro-llms"] },
+    "karp-deep-dive-llms":   { tier: 1, order: 30, prereqs: ["karp-intro-llms"] },
+    "karp-build-gpt":        { tier: 2, order: 10, prereqs: ["karp-intro-llms"] },
+    "karp-zero-hero":        { tier: 2, order: 20, prereqs: ["karp-intro-llms"] },
+    "karp-tokenizer":        { tier: 3, order: 10, prereqs: ["karp-build-gpt"] },
+    "karp-gpt2":             { tier: 3, order: 20, prereqs: ["karp-build-gpt"] },
+  },
+  "claude-code-mastery": {
+    "karp-software30":             { tier: 1, order: 10, prereqs: [] },
+    "anthropic-effective-agents":  { tier: 1, order: 20, prereqs: ["karp-software30"] },
+    "mcp-intro":                   { tier: 1, order: 30, prereqs: [] },
+    "cc-docs":                     { tier: 2, order: 10, prereqs: ["mcp-intro"] },
+    "cc-best-practices":           { tier: 2, order: 20, prereqs: ["cc-docs"] },
+    "cc-skills":                   { tier: 2, order: 30, prereqs: ["cc-docs"] },
+    "cc-hooks":                    { tier: 2, order: 40, prereqs: ["cc-docs"] },
+    "cc-mcp-build":                { tier: 3, order: 10, prereqs: ["cc-docs", "mcp-intro"] },
+    "anthropic-cookbook":         { tier: 3, order: 20, prereqs: ["anthropic-effective-agents"] },
+    "anthropic-multiagent":       { tier: 3, order: 30, prereqs: ["anthropic-effective-agents"] },
+    "cc-agent-view":               { tier: 4, order: 10, prereqs: ["cc-best-practices"] },
+    "simonw-agentic-patterns":     { tier: 4, order: 20, prereqs: ["anthropic-effective-agents"] },
+  },
+};
+
 // ============= Supabase sync =============
 const SUPABASE_URL  = document.querySelector('meta[name="supabase-url"]').content.trim();
 const SUPABASE_ANON = document.querySelector('meta[name="supabase-anon-key"]').content.trim();
@@ -590,7 +729,11 @@ let state = loadLocal();
 state.items = state.items || {};
 state.custom = state.custom || {};
 state.collapsed = state.collapsed || {};
+state.memoryReviews = Array.isArray(state.memoryReviews) ? state.memoryReviews : [];
 state.lastBookmarkSync = state.lastBookmarkSync || null;
+state.activePathId = LEARNING_PATHS.some(p => p.id === state.activePathId)
+  ? state.activePathId
+  : DEFAULT_PATH_ID;
 state.updatedAt = state.updatedAt || new Date(0).toISOString();
 
 // ============= Sync layer =============
@@ -610,7 +753,13 @@ function updateSyncPill(status, msg) {
 
 function mergeStates(local, remote) {
   // Per-item last-write-wins by updatedAt.
-  const out = { items: {}, custom: {}, collapsed: {}, updatedAt: new Date().toISOString() };
+  // Start with all top-level fields from both sides so cron-owned state such as
+  // insights, experiments, and the interest profile cannot be erased by a PWA
+  // pull. The newer side wins when both contain the same top-level key.
+  const localWins = (local.updatedAt || "") > (remote.updatedAt || "");
+  const older = localWins ? remote : local;
+  const newer = localWins ? local : remote;
+  const out = { ...older, ...newer, items: {}, custom: {}, updatedAt: new Date().toISOString() };
   const ids = new Set([...Object.keys(local.items||{}), ...Object.keys(remote.items||{})]);
   for (const id of ids) {
     const l = local.items?.[id], r = remote.items?.[id];
@@ -629,15 +778,64 @@ function mergeStates(local, remote) {
       out.custom[id] = l || r;
     }
   }
+
+  // Reviews are an append-only evidence stream shared by the browser and the
+  // grading worker. Merge by review id so an unrelated browser edit cannot
+  // replace a remotely graded answer with its older "pending" copy.
+  const reviewById = new Map();
+  for (const review of [...(remote.memoryReviews || []), ...(local.memoryReviews || [])]) {
+    if (!review?.id) continue;
+    const previous = reviewById.get(review.id);
+    if (!previous) {
+      reviewById.set(review.id, review);
+      continue;
+    }
+    const previousAt = previous.seenAt || previous.gradedAt || previous.submittedAt || "";
+    const reviewAt = review.seenAt || review.gradedAt || review.submittedAt || "";
+    reviewById.set(review.id, reviewAt >= previousAt ? { ...previous, ...review } : { ...review, ...previous });
+  }
+  out.memoryReviews = [...reviewById.values()]
+    .sort((a, b) => (a.submittedAt || "").localeCompare(b.submittedAt || ""))
+    .slice(-100);
+
+  const newerDated = (left, right) => {
+    if (!left) return right;
+    if (!right) return left;
+    return (left.updatedAt || "") > (right.updatedAt || "") ? left : right;
+  };
+  out.learnerProfile = newerDated(local.learnerProfile, remote.learnerProfile);
+  if (!out.learnerProfile) delete out.learnerProfile;
+  out.pathRecommendations = {};
+  const pathIds = new Set([
+    ...Object.keys(local.pathRecommendations || {}),
+    ...Object.keys(remote.pathRecommendations || {}),
+  ]);
+  for (const pathId of pathIds) {
+    out.pathRecommendations[pathId] = newerDated(
+      local.pathRecommendations?.[pathId],
+      remote.pathRecommendations?.[pathId]
+    );
+  }
+  if (!pathIds.size) delete out.pathRecommendations;
+
   // collapsed and pendingMemory: take whichever side has more recent overall
   // updatedAt. For pendingMemory this handles the race where the user
   // dismisses (clearing local pendingMemory) and the next pull comes in with
   // the stale remote pendingMemory — local.updatedAt > remote.updatedAt
   // means we keep local (cleared) and the next push reconciles the server.
-  const localWins = local.updatedAt > (remote.updatedAt || "");
   out.collapsed = localWins ? (local.collapsed || {}) : (remote.collapsed || {});
-  out.pendingMemory = localWins ? local.pendingMemory : remote.pendingMemory;
+  const pendingMemory = localWins ? local.pendingMemory : remote.pendingMemory;
+  const alreadyAnswered = pendingMemory && out.memoryReviews.some(review =>
+    review.itemId === pendingMemory.itemId &&
+    review.generatedAt && review.generatedAt === pendingMemory.generatedAt
+  );
+  if (pendingMemory && !alreadyAnswered) out.pendingMemory = pendingMemory;
+  else delete out.pendingMemory;
   out.lastBookmarkSync = localWins ? local.lastBookmarkSync : remote.lastBookmarkSync;
+  const candidatePathId = localWins ? local.activePathId : remote.activePathId;
+  out.activePathId = LEARNING_PATHS.some(p => p.id === candidatePathId)
+    ? candidatePathId
+    : DEFAULT_PATH_ID;
   return out;
 }
 
@@ -695,6 +893,24 @@ function relTime(d) {
 function allItems() {
   return [...SEED, ...Object.values(state.custom)];
 }
+function activePath() {
+  return LEARNING_PATHS.find(p => p.id === state.activePathId) || LEARNING_PATHS[0];
+}
+function pathPlacement(item, pathId = state.activePathId) {
+  // Custom items created after multi-path support carry their placements with
+  // the item. Older custom items have no map and retain their default-path tier.
+  if (item.pathPlacements) return item.pathPlacements[pathId] || null;
+  const mapped = PATH_PLACEMENTS[pathId]?.[item.id];
+  if (mapped) return mapped;
+  if (pathId === DEFAULT_PATH_ID && item.tier >= 1 && item.tier <= 5) {
+    return { tier: item.tier, order: item.order || 0, prereqs: item.prereqs || [] };
+  }
+  return null;
+}
+function itemInPath(item, pathId = state.activePathId) {
+  const placement = pathPlacement(item, pathId);
+  return placement ? { ...item, ...placement } : null;
+}
 function getStatus(id) { return (state.items[id] && state.items[id].status) || "todo"; }
 function getItemMeta(id) { return state.items[id] || {}; }
 function setStatus(id, status) {
@@ -715,7 +931,7 @@ function cycleStatus(id) {
 
 // ---- Mark-done modal (Phase 1.2) ----------------------------------------
 // Single chokepoint for "going to done" so we always capture takeaway + rating
-// + completedAt + nextReviewAt (initial = +7d, adjusted later by memory.js).
+// + completedAt + nextReviewAt (initial = +1d, adjusted after recall grading).
 let doneTarget = null;
 let currentRating = 0;
 
@@ -758,8 +974,8 @@ function commitDone(saveForm) {
     status: "done",
     completedAt: prev.completedAt || now.toISOString(),
     // Spaced-recall first-review fires at completedAt + 1 day (Ebbinghaus).
-    // memory.js progresses: 1d → 7d → 30d → 90d → 180d on "remembered",
-    // halves on "fuzzy", resets to 1d on "forgot".
+    // The server-side grader progresses the schedule from evidence in the
+    // learner's written recall answer, rather than trusting the button alone.
     nextReviewAt: prev.nextReviewAt || addDays(now, 1).toISOString().slice(0, 10),
     reviewStep: prev.reviewStep ?? 0,
     lastReviewedAt: prev.lastReviewedAt || null,
@@ -798,27 +1014,29 @@ function addDays(d, n) {
   out.setDate(out.getDate() + n);
   return out;
 }
-// Review schedule shared with cron/memory.js. Step index → next interval days.
-// 0 → first impression (1d), 1 → 7d, 2 → 30d, 3 → 90d, 4 → 180d (cap).
-const REVIEW_INTERVALS = [1, 7, 30, 90, 180];
-function nextIntervalFor(step) {
-  return REVIEW_INTERVALS[Math.min(Math.max(step, 0), REVIEW_INTERVALS.length - 1)];
-}
 function prereqsSatisfied(item) {
   if (!item.prereqs || !item.prereqs.length) return true;
   return item.prereqs.every(pid => getStatus(pid) === "done" || getStatus(pid) === "skipped");
 }
 function sequencedItems() {
   return allItems()
-    .filter(i => i.tier >= 1 && i.tier <= 5)
+    .map(i => itemInPath(i))
+    .filter(Boolean)
     .sort((a,b) => (a.tier - b.tier) || (a.order - b.order) || a.title.localeCompare(b.title));
 }
 function upNextItems(limit = 5) {
+  const recommended = state.pathRecommendations?.[state.activePathId]?.itemIds || [];
+  const rank = new Map(recommended.map((id, index) => [id, index]));
   return sequencedItems()
     .filter(i => {
       const s = getStatus(i.id);
       if (s === "done" || s === "skipped") return false;
       return prereqsSatisfied(i);
+    })
+    .sort((a, b) => {
+      const aRank = rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER;
+      const bRank = rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER;
+      return aRank - bRank;
     })
     .slice(0, limit);
 }
@@ -829,6 +1047,8 @@ function ongoingItems() {
 // ============= Views =============
 function renderUpNext() {
   const items = upNextItems(5);
+  const recommendation = state.pathRecommendations?.[state.activePathId] || {};
+  const recommendedIds = new Set(recommendation.itemIds || []);
   const cards = document.getElementById("next-cards");
   const prog  = document.getElementById("next-progress");
   const seq = sequencedItems();
@@ -837,7 +1057,7 @@ function renderUpNext() {
   const remainingMin = seq.filter(i => getStatus(i.id) !== "done" && getStatus(i.id) !== "skipped").reduce((s,i)=>s+(i.min||0),0);
   prog.innerHTML = `
     <div class="head">
-      <span>Path: <b>${seqDone} / ${seq.length}</b> done</span>
+      <span>${esc(activePath().name)}: <b>${seqDone} / ${seq.length}</b> done</span>
       <span><b>${fmtDuration(remainingMin)}</b> remaining</span>
     </div>
     <div class="bar"><div style="width:${pct}%"></div></div>`;
@@ -847,14 +1067,16 @@ function renderUpNext() {
   }
   cards.innerHTML = items.map((it, idx) => {
     const status = getStatus(it.id);
+    const isRecommended = recommendedIds.has(it.id);
     return `
-      <div class="next-card ${idx === 0 ? "primary" : ""}">
+      <div class="next-card ${idx === 0 ? "primary" : ""} ${isRecommended ? "recommended" : ""}">
         <div class="order">${idx+1}</div>
         <div>
           <div class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></div>
           <div class="meta">
             <span>${esc(it.source)}</span><span>${fmtDuration(it.min)}</span>
-            <span>Tier ${it.tier} · ${TIER_META[it.tier].name}</span>
+            <span>Tier ${it.tier} · ${esc(activePath().tiers[it.tier]?.name || "Learning path")}</span>
+            ${isRecommended ? `<span class="adaptive-tag">Recommended from your recall</span>` : ""}
           </div>
           <div class="why">${esc(it.why || "")}</div>
           <div class="actions">
@@ -883,12 +1105,16 @@ function renderPath() {
   const tiers = {};
   for (const it of seq) (tiers[it.tier] = tiers[it.tier] || []).push(it);
   let html = "";
-  for (const t of [1,2,3,4,5]) {
+  for (const t of Object.keys(activePath().tiers).map(Number).sort((a,b) => a-b)) {
     const items = tiers[t] || []; if (!items.length) continue;
-    const meta = TIER_META[t];
+    const meta = activePath().tiers[t];
     const done = items.filter(i => getStatus(i.id) === "done").length;
     const pct = items.length ? Math.round((done/items.length)*100) : 0;
-    const userCollapse = state.collapsed[t];
+    const collapseKey = `${state.activePathId}:${t}`;
+    // Honor legacy numeric collapse keys for the original path until the user
+    // next toggles that tier, then write the namespaced key.
+    const userCollapse = state.collapsed[collapseKey] ??
+      (state.activePathId === DEFAULT_PATH_ID ? state.collapsed[t] : undefined);
     const allDone = done === items.length;
     const isOpen = userCollapse === undefined ? !allDone : !userCollapse;
     html += `
@@ -914,7 +1140,7 @@ function renderPath() {
     head.addEventListener("click", () => {
       const tier = head.closest(".tier"); const t = tier.dataset.tier;
       tier.classList.toggle("open");
-      state.collapsed[t] = !tier.classList.contains("open");
+      state.collapsed[`${state.activePathId}:${t}`] = !tier.classList.contains("open");
       saveLocal(state); pushDebounced();
     });
   });
@@ -951,14 +1177,17 @@ function renderPathItem(it, step) {
 }
 
 function renderDoneNote(status, meta) {
-  if (status !== "done" || (!meta.note && !meta.rating)) return "";
+  if (status !== "done" || (!meta.note && !meta.rating && meta.masteryScore == null)) return "";
   const rating = meta.rating
     ? `<span class="rating-inline" title="${meta.rating}/5">${"★".repeat(meta.rating)}${"☆".repeat(5 - meta.rating)}</span>`
     : "";
+  const mastery = meta.masteryScore != null
+    ? `<span class="mastery-inline">AI mastery ${Math.round(Number(meta.masteryScore))}%</span>`
+    : "";
   const note = meta.note
     ? `<span class="done-note-tag">Took away</span>${esc(meta.note)}`
-    : `<span class="done-note-tag">Rated</span>`;
-  return `<div class="done-note">${note}${rating}</div>`;
+    : meta.rating ? `<span class="done-note-tag">Rated</span>` : "";
+  return `<div class="done-note">${note}${rating}${mastery}</div>`;
 }
 
 const elsB = {
@@ -1118,44 +1347,161 @@ function renderRecallBanner() {
     : "";
 }
 
-function respondToRecall(outcome) {
+let recallResponseOutcome = null;
+
+function openRecallResponse(outcome) {
   const pm = state.pendingMemory;
-  if (!pm || !pm.itemId) return;
-  const id = pm.itemId;
-  const prev = state.items[id] || {};
-  let nextStep = prev.reviewStep ?? 0;
-  let nextDays;
-  if (outcome === "remembered") {
-    nextStep = Math.min(nextStep + 1, REVIEW_INTERVALS.length - 1);
-    nextDays = nextIntervalFor(nextStep);
-  } else if (outcome === "fuzzy") {
-    // Halve current interval, min 1 day; step holds steady so we re-test soon.
-    const cur = nextIntervalFor(nextStep);
-    nextDays = Math.max(1, Math.floor(cur / 2));
-  } else { // forgot
-    nextStep = 0;
-    nextDays = 1;
-  }
-  const now = new Date();
-  state.items[id] = {
-    ...prev,
-    reviewStep: nextStep,
-    lastReviewedAt: now.toISOString(),
-    nextReviewAt: addDays(now, nextDays).toISOString().slice(0, 10),
-    updatedAt: now.toISOString(),
+  if (!pm?.itemId || !pm.question) return;
+  const labels = {
+    remembered: "You selected: I remembered",
+    fuzzy: "You selected: A little fuzzy",
+    forgot: "You selected: I forgot",
   };
+  recallResponseOutcome = outcome;
+  document.getElementById("recall-response-choice").textContent = labels[outcome] || "Self-assessment recorded";
+  document.getElementById("recall-response-question").textContent = pm.question;
+  document.getElementById("recall-response-answer").value = "";
+  document.getElementById("recall-response-error").textContent = "";
+  document.getElementById("recall-response-backdrop").classList.add("open");
+  setTimeout(() => document.getElementById("recall-response-answer").focus(), 60);
+}
+
+function closeRecallResponse() {
+  recallResponseOutcome = null;
+  document.getElementById("recall-response-backdrop").classList.remove("open");
+}
+
+function submitRecallResponse() {
+  const pm = state.pendingMemory;
+  const answer = document.getElementById("recall-response-answer").value.trim();
+  if (!pm?.itemId || !recallResponseOutcome) return;
+  if (!answer) {
+    document.getElementById("recall-response-error").textContent =
+      "Write what you remember, or enter “I don't remember.”";
+    return;
+  }
+
+  const itemMeta = state.items[pm.itemId] || {};
+  const submittedAt = new Date().toISOString();
+  const candidateItemIds = sequencedItems()
+    .filter(item =>
+      item.id !== pm.itemId &&
+      !["done", "skipped"].includes(getStatus(item.id)) &&
+      prereqsSatisfied(item)
+    )
+    .slice(0, 12)
+    .map(item => item.id);
+  const review = {
+    id: `mr-${pm.itemId}-${Date.now()}`,
+    itemId: pm.itemId,
+    pathId: state.activePathId,
+    question: pm.question,
+    referenceAnswer: pm.referenceAnswer || "",
+    keyPoints: Array.isArray(pm.keyPoints) ? pm.keyPoints : [],
+    answer,
+    selfAssessment: recallResponseOutcome,
+    previousReviewStep: itemMeta.reviewStep ?? 0,
+    candidateItemIds,
+    status: "pending",
+    submittedAt,
+    generatedAt: pm.generatedAt || null,
+  };
+
+  state.memoryReviews = [...(state.memoryReviews || []), review].slice(-100);
   delete state.pendingMemory;
-  state.updatedAt = now.toISOString();
+  state.updatedAt = submittedAt;
   saveLocal(state);
   pushDebounced();
+  closeRecallResponse();
   render();
 }
 
+function latestMemoryReview() {
+  return [...(state.memoryReviews || [])]
+    .filter(review => review?.submittedAt)
+    .sort((a, b) => (b.submittedAt || "").localeCompare(a.submittedAt || ""))[0] || null;
+}
+
+function renderReviewStatus() {
+  const root = document.getElementById("review-status");
+  const review = latestMemoryReview();
+  root.className = "review-status";
+  root.innerHTML = "";
+  if (!review || review.seenAt) return;
+
+  if (review.status === "pending") {
+    root.classList.add("show");
+    root.innerHTML = `
+      <h3>Assessing your explanation…</h3>
+      <p>Your answer is saved. The private grading job will update your knowledge profile, review timing, and recommended next steps—usually within two minutes.</p>`;
+    return;
+  }
+  if (review.status !== "graded") return;
+
+  const verdict = ["correct", "partial", "incorrect"].includes(review.verdict) ? review.verdict : "partial";
+  const labels = { correct: "Strong recall", partial: "Partial recall", incorrect: "Needs reinforcement" };
+  root.classList.add("show", verdict);
+  root.innerHTML = `
+    <h3>${labels[verdict]} · ${Math.round(Number(review.score) || 0)}%</h3>
+    <p>${esc(review.feedback || "Your response has been assessed.")}</p>
+    ${review.correctedAnswer ? `<div class="ideal-answer"><b>Reinforcement:</b> ${esc(review.correctedAnswer)}</div>` : ""}
+    ${review.nextReviewAt ? `<p>Next recall: <b>${esc(review.nextReviewAt)}</b></p>` : ""}
+    <button data-review-seen="${esc(review.id)}">Got it</button>`;
+  root.querySelector("button[data-review-seen]")?.addEventListener("click", () => {
+    const now = new Date().toISOString();
+    state.memoryReviews = (state.memoryReviews || []).map(entry =>
+      entry.id === review.id ? { ...entry, seenAt: now } : entry
+    );
+    state.updatedAt = now;
+    saveLocal(state);
+    pushDebounced();
+    renderReviewStatus();
+  });
+}
+
+function renderKnowledgeProfile() {
+  const root = document.getElementById("knowledge-card");
+  const profile = state.learnerProfile;
+  const recommendation = state.pathRecommendations?.[state.activePathId];
+  root.className = "knowledge-card";
+  root.innerHTML = "";
+  if (!profile?.summary && !recommendation?.reason) return;
+
+  const strengths = Array.isArray(profile?.strengths) ? profile.strengths.slice(0, 3) : [];
+  const gaps = Array.isArray(profile?.gaps) ? profile.gaps.slice(0, 3) : [];
+  root.classList.add("show");
+  root.innerHTML = `
+    <h3>What the app knows about your learning</h3>
+    ${profile?.summary ? `<p>${esc(profile.summary)}</p>` : ""}
+    ${strengths.length ? `<div class="profile-list"><b>Demonstrated:</b> ${strengths.map(esc).join(" · ")}</div>` : ""}
+    ${gaps.length ? `<div class="profile-list"><b>Working on:</b> ${gaps.map(esc).join(" · ")}</div>` : ""}
+    ${recommendation?.reason ? `<p><b>Path adjustment:</b> ${esc(recommendation.reason)}</p>` : ""}`;
+}
+
 function render() {
-  renderRecallBanner(); renderUpNext(); renderPath(); renderBacklog(); renderOngoing(); updateCounts();
+  const selectedPath = document.getElementById("path-select");
+  if (selectedPath && selectedPath.value !== state.activePathId) selectedPath.value = state.activePathId;
+  document.getElementById("path-description").textContent = activePath().description;
+  renderRecallBanner(); renderReviewStatus(); renderKnowledgeProfile();
+  renderUpNext(); renderPath(); renderBacklog(); renderOngoing(); updateCounts();
 }
 
 // ============= Tabs + UI =============
+const pathSelect = document.getElementById("path-select");
+pathSelect.innerHTML = LEARNING_PATHS
+  .map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
+  .join("");
+pathSelect.value = state.activePathId;
+pathSelect.addEventListener("change", () => {
+  state.activePathId = LEARNING_PATHS.some(p => p.id === pathSelect.value)
+    ? pathSelect.value
+    : DEFAULT_PATH_ID;
+  state.updatedAt = new Date().toISOString();
+  saveLocal(state);
+  pushDebounced();
+  render();
+});
+
 document.getElementById("tabs").addEventListener("click", e => {
   const tab = e.target.closest(".tab"); if (!tab) return;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -1173,12 +1519,20 @@ document.getElementById("add-btn").addEventListener("click", () => {
   const source = prompt("Source / author?") || "Custom";
   const type = prompt("Type (Article / Video / Podcast / Tutorial / Course / Repo / Newsletter)", "Article") || "Article";
   const cat = prompt("Category?", "Agentic Engineering") || "Custom";
-  const tier = parseInt(prompt("Tier? 1-5 path, 0 ongoing", "0")) || 0;
+  const maxTier = Math.max(...Object.keys(activePath().tiers).map(Number));
+  const tier = parseInt(prompt(`Tier in ${activePath().name}? 1-${maxTier}, or 0 for a global ongoing read`, "0")) || 0;
+  if (tier < 0 || tier > maxTier) {
+    alert(`Choose a tier from 1-${maxTier}, or 0 for an ongoing read.`);
+    return;
+  }
   const min = parseInt(prompt("Minutes?", "30")) || 0;
   const prio = prompt("Priority? high/med/low", "med") || "med";
   const why = prompt("Why does it matter?") || "";
   const id = "custom-" + Date.now();
-  state.custom[id] = { id, title, url, source, type, category: cat, tier, order: 9999, prereqs:[], min, prio, why,
+  const pathPlacements = tier > 0
+    ? { [state.activePathId]: { tier, order: 9999, prereqs: [] } }
+    : undefined;
+  state.custom[id] = { id, title, url, source, type, category: cat, tier, order: 9999, prereqs:[], pathPlacements, min, prio, why,
     addedAt: new Date().toISOString().slice(0,10), updatedAt: new Date().toISOString() };
   state.items[id] = { status: "todo", updatedAt: new Date().toISOString() };
   saveLocal(state); pushDebounced();
@@ -1222,7 +1576,23 @@ document.addEventListener("keydown", e => {
 document.getElementById("recall-banner").addEventListener("click", e => {
   const btn = e.target.closest("button[data-outcome]");
   if (!btn) return;
-  respondToRecall(btn.dataset.outcome);
+  openRecallResponse(btn.dataset.outcome);
+});
+
+const recallResponseModal = document.getElementById("recall-response-backdrop");
+document.getElementById("recall-response-submit").addEventListener("click", submitRecallResponse);
+document.getElementById("recall-response-cancel").addEventListener("click", closeRecallResponse);
+recallResponseModal.addEventListener("click", e => {
+  if (e.target === recallResponseModal) closeRecallResponse();
+});
+document.getElementById("recall-response-answer").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    submitRecallResponse();
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && recallResponseModal.classList.contains("open")) closeRecallResponse();
 });
 
 document.getElementById("copy-sync").addEventListener("click", () => {
@@ -1261,7 +1631,14 @@ document.getElementById("import-btn").addEventListener("click", () => {
 });
 document.getElementById("reset-btn").addEventListener("click", () => {
   if (!confirm("Clear all your progress, custom items, and tier-collapse state on this device?")) return;
-  state = { items:{}, custom:{}, collapsed:{}, updatedAt: new Date(0).toISOString() };
+  // Preserve cron-owned top-level data (bookmark insights, experiments, and
+  // interest profile). This action promises to reset learning progress, not
+  // erase the separate interest-stream analysis.
+  state = { ...state, items:{}, custom:{}, collapsed:{}, updatedAt: new Date().toISOString() };
+  delete state.pendingMemory;
+  delete state.memoryReviews;
+  delete state.learnerProfile;
+  delete state.pathRecommendations;
   saveLocal(state); pushDebounced(); render();
 });
 

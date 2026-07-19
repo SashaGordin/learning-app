@@ -4,7 +4,7 @@
 import { Resend } from "resend";
 import { marked } from "marked";
 
-const FROM = process.env.EMAIL_FROM || "Briefs <briefs@resend.dev>";
+const FROM = process.env.EMAIL_FROM || "Learning App <briefs@resend.dev>";
 const TO = process.env.RECIPIENT_EMAIL;
 
 /**

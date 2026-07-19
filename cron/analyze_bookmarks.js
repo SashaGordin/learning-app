@@ -16,8 +16,8 @@
 //   docker compose exec cron node analyze_bookmarks.js --skip-synthesis
 //
 // Output lands in state.experiments[] / state.exploreIdeas[] /
-// state.interestProfile / state.insights, plus concepts/*.md on disk. The
-// weekly_brief.js reads all three and surfaces a handful per week.
+// state.interestProfile / state.insights, plus concepts/*.md on disk. These
+// are context data for future in-app learning surfaces and curator input.
 //
 // Idempotent in the classification pass: re-running with no new bookmarks
 // skips both classification AND synthesis (synthesis depends on classified
@@ -178,7 +178,7 @@ function buildProfilePrompt(corpus, experiments) {
 ${experiments.slice(-25).map(e => `- ${e.title}${e.status && e.status !== "suggested" ? ` (status: ${e.status})` : ""}`).join("\n")}`
     : "(no experiments tracked yet — this is the first analysis run)";
 
-  return `You are writing Sasha's interest profile — a personal context document that captures the SPECIFIC patterns of curiosity in his X bookmarks. This profile gets injected into his weekly brief prompt so recommendations stay tailored.
+  return `You are writing Sasha's interest profile — a personal context document that captures the SPECIFIC patterns of curiosity in his X bookmarks. This profile guides future learning-path recommendations and curator decisions.
 
 Sasha is a developer focused on AI / agentic engineering / Claude Code / coding agents. The profile should NOT just restate that — it should surface the specific themes, recurring sub-interests, and the way he reads (try-later vs read-later vs save-for-reference) that are visible in his bookmarks.
 
@@ -213,7 +213,7 @@ CONSTRAINTS:
 
 For each cluster also write:
 - "theme": 1-2 sentence statement of the cross-cutting PATTERN these bookmarks reveal when read together.
-- "summary": one tight sentence (<=140 chars) suitable for injection into a weekly brief.
+- "summary": one tight sentence (<=140 chars) suitable for an in-app recommendation surface.
 
 CLASSIFIED BOOKMARKS:
 ${listing}

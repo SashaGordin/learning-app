@@ -1,11 +1,8 @@
-// Reads the user's learning state from Supabase and joins it with the SEED
-// metadata parsed out of frontend/index.html. Exposes `recentDones()` for
-// brief personalization and a small `formatPersonalization()` helper that
-// turns those into a prompt-ready Markdown block.
+// Reads and writes the user's learning state in Supabase and joins item ids
+// with SEED metadata parsed out of frontend/index.html.
 //
 // Reads are best-effort: if SUPABASE_URL / LEARNING_SYNC_ID aren't set, or
-// the network is down, we return empty results instead of throwing. Briefs
-// degrade to the generic prompt rather than failing entirely.
+// the network is down, callers receive null instead of an exception.
 
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
@@ -54,7 +51,7 @@ function client() {
 export async function loadState() {
   const syncId = process.env.LEARNING_SYNC_ID;
   if (!syncId) {
-    console.log("[state] LEARNING_SYNC_ID not set — briefs will run without personalization.");
+    console.log("[state] LEARNING_SYNC_ID not set — skipping state access.");
     return null;
   }
   const supa = client();
@@ -136,182 +133,13 @@ export async function getItemById(id, state = null) {
 }
 
 /**
- * Most recently completed items (status === "done"), newest first, joined
- * with SEED metadata for title/source/category. Each result:
- *   { id, title, source, url, category, type, note, rating, completedAt }
- *
- * @param {number} limit — max items to return (default 7).
+ * Returns the complete shared resource catalog (SEED + custom items). Useful
+ * for jobs that need to resolve a bounded set of user-selected item ids.
  */
-export async function recentDones(limit = 7) {
-  const [state, seed] = await Promise.all([loadState(), loadSeed().catch(e => {
-    console.warn(`[state] SEED parse failed: ${e?.message || e}`);
-    return new Map();
-  })]);
-  if (!state || !state.items) return [];
-
-  const customMap = state.custom || {};
-  const out = [];
-  for (const [id, meta] of Object.entries(state.items)) {
-    if (!meta || meta.status !== "done") continue;
-    const seedItem = seed.get(id) || customMap[id] || null;
-    out.push({
-      id,
-      title: seedItem?.title || id,
-      source: seedItem?.source || "",
-      url: seedItem?.url || "",
-      category: seedItem?.category || "",
-      type: seedItem?.type || "",
-      note: meta.note || null,
-      rating: meta.rating || null,
-      completedAt: meta.completedAt || meta.updatedAt || null,
-    });
-  }
-  out.sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
-  return out.slice(0, Math.max(limit, 0));
-}
-
-/**
- * Formats a Markdown block suitable to inject into a brief prompt. Returns
- * an empty string if there are no dones — so callers can safely template it
- * into prompts unconditionally.
- */
-export function formatPersonalization(dones) {
-  if (!dones || !dones.length) return "";
-  const lines = dones.map(d => {
-    const rating = d.rating ? ` (rated ${d.rating}/5)` : "";
-    const note   = d.note ? `\n  note: "${d.note}"` : "";
-    const when   = d.completedAt ? ` — ${d.completedAt.slice(0, 10)}` : "";
-    return `- "${d.title}"${d.source ? ` · ${d.source}` : ""}${rating}${when}${note}`;
-  });
-  return [
-    "## RECENT LEARNING CONTEXT",
-    "Sasha just finished these (newest first). Reference them where relevant — connect today's news to what they just learned, build on themes in their notes, and don't resurface items they marked done.",
-    "",
-    lines.join("\n"),
-    "",
-  ].join("\n");
-}
-
-/**
- * Returns the freshest N bookmark-synthesis insights for brief injection.
- * Populated by cron/analyze_bookmarks.js. Sorted newest-first by
- * generatedAt. Returns an empty array if state isn't loaded or no insights
- * exist yet.
- */
-export async function recentInsights({ limit = 3 } = {}) {
-  const state = await loadState();
-  if (!state || !Array.isArray(state.insights)) return [];
-  return [...state.insights]
-    .sort((a, b) => (b.generatedAt || "").localeCompare(a.generatedAt || ""))
-    .slice(0, Math.max(limit, 0));
-}
-
-/**
- * Formats a set of insights as a Markdown block for brief-prompt injection.
- * Each insight surfaces title, theme (the cross-cutting pattern), summary,
- * the source file (relative path Sasha can grep), and source bookmark count.
- * Returns an empty string when there's nothing to inject so callers can
- * template unconditionally.
- */
-export function formatInsights(insights = []) {
-  if (!insights || !insights.length) return "";
-  const parts = [
-    "## INSIGHTS FROM YOUR BOOKMARKS",
-    "These are cross-cutting concept notes Sasha generated this week by clustering his bookmarks. Reproduce them VERBATIM in the brief's `## Insights from your bookmarks` section — title, theme, and summary; cite the source file path so he knows where to find the full note. Do not summarize or paraphrase; the value here is in the synthesis Claude already did. If multiple insights are listed, include all of them.",
-    "",
-  ];
-  for (const i of insights) {
-    parts.push(`- **${i.title}** (${i.sourceCount || (Array.isArray(i.sourceBookmarkIds) ? i.sourceBookmarkIds.length : "?")} sources)`);
-    if (i.theme) parts.push(`  theme: ${i.theme}`);
-    if (i.summary) parts.push(`  summary: ${i.summary}`);
-    if (i.filePath) parts.push(`  full note: \`${i.filePath}\``);
-  }
-  parts.push("");
-  return parts.join("\n");
-}
-
-/**
- * Returns experiment/idea suggestions + interest profile for brief injection.
- * Pulls up to `experimentLimit` experiments and `ideaLimit` ideas with
- * status === "suggested", oldest-suggested-first so they age into the brief
- * deterministically. Best-effort: returns empty fields if state isn't
- * available or the keys are missing — Phase 6.3 V1 populates them via
- * cron/analyze_bookmarks.js.
- */
-export async function recentSuggestions({ experimentLimit = 3, ideaLimit = 2 } = {}) {
-  const state = await loadState();
-  if (!state) return { experiments: [], ideas: [], profile: null };
-
-  const sortBySuggested = (a, b) =>
-    (a.suggestedAt || "").localeCompare(b.suggestedAt || "");
-
-  const experiments = (state.experiments || [])
-    .filter(e => e && e.status === "suggested")
-    .sort(sortBySuggested)
-    .slice(0, Math.max(experimentLimit, 0));
-
-  const ideas = (state.exploreIdeas || [])
-    .filter(e => e && e.status === "suggested")
-    .sort(sortBySuggested)
-    .slice(0, Math.max(ideaLimit, 0));
-
-  return { experiments, ideas, profile: state.interestProfile || null };
-}
-
-/**
- * Formats the interest profile + suggested experiments + suggested ideas as
- * Markdown blocks to inject into a brief prompt. Returns an empty string if
- * there's nothing to inject so callers can template unconditionally.
- */
-export function formatSuggestions({ experiments = [], ideas = [], profile = null } = {}) {
-  if (!experiments.length && !ideas.length && !profile) return "";
-
-  const parts = [];
-
-  if (profile?.summary) {
-    parts.push("## INTEREST PROFILE");
-    parts.push("This is Sasha's accumulated interest profile, derived from his X bookmarks. Use it to bias what you surface — what genuinely fits him, not just what's trending.");
-    parts.push("");
-    parts.push(profile.summary);
-    if (Array.isArray(profile.topThemes) && profile.topThemes.length) {
-      parts.push("");
-      parts.push(`Top themes: ${profile.topThemes.join(", ")}`);
-    }
-    parts.push("");
-  }
-
-  if (experiments.length) {
-    parts.push("## EXPERIMENTS TO SURFACE THIS WEEK");
-    parts.push("These are concrete dev-workflow / tooling experiments derived from Sasha's recent bookmarks. Reproduce them VERBATIM (title, why, steps, timeToTry) in the brief's `## Experiments to try` section — do not paraphrase, summarize, or pick favorites; if more than 3 are listed include all of them.");
-    parts.push("");
-    for (const e of experiments) {
-      parts.push(`- **${e.title}** ${e.timeToTry ? `(${e.timeToTry})` : ""}`.trim());
-      if (e.why) parts.push(`  why: ${e.why}`);
-      if (Array.isArray(e.steps) && e.steps.length) {
-        parts.push(`  steps:`);
-        for (const s of e.steps) parts.push(`    - ${s}`);
-      }
-      if (Array.isArray(e.sourceBookmarkIds) && e.sourceBookmarkIds.length) {
-        parts.push(`  source: https://x.com/i/web/status/${e.sourceBookmarkIds[0]}`);
-      }
-    }
-    parts.push("");
-  }
-
-  if (ideas.length) {
-    parts.push("## IDEAS WORTH EXPLORING");
-    parts.push("Bigger weekend-scale ideas from his bookmarks. Reproduce VERBATIM in the brief's `## Ideas worth exploring` subsection of `## Experiments to try`.");
-    parts.push("");
-    for (const e of ideas) {
-      parts.push(`- **${e.title}**`);
-      if (e.hypothesis) parts.push(`  hypothesis: ${e.hypothesis}`);
-      if (e.firstAction) parts.push(`  first action: ${e.firstAction}`);
-      if (Array.isArray(e.sourceBookmarkIds) && e.sourceBookmarkIds.length) {
-        parts.push(`  source: https://x.com/i/web/status/${e.sourceBookmarkIds[0]}`);
-      }
-    }
-    parts.push("");
-  }
-
-  return parts.join("\n");
+export async function listItems(state = null) {
+  const [seed, st] = await Promise.all([
+    loadSeed().catch(() => new Map()),
+    state ? Promise.resolve(state) : loadState(),
+  ]);
+  return [...seed.values(), ...Object.values(st?.custom || {})];
 }

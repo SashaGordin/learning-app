@@ -14,7 +14,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
-  # Cron container. Runs daily_brief / weekly_brief / curator on schedule.
+  # Cron container. Runs recall generation/grading and the weekly curator.
   # Mounts ./frontend read-write so the curator can update the SEED in place.
   cron:
     build: ./cron

@@ -33,23 +33,19 @@ function run(script) {
 }
 
 // 6:25 AM weekdays — spaced-recall job. Writes pendingMemory to state so
-// the daily brief at 6:30 picks it up. Fast (no web search), but giving it
-// a 5-min head start avoids a race where the brief runs before it finishes.
+// the PWA Memory card picks it up. Fast (no web search).
 cron.schedule("25 6 * * 1-5", () => run("memory.js"), { timezone: TZ });
 
-// Weekday mornings, 6:30 AM in TZ
-cron.schedule("30 6 * * 1-5", () => run("daily_brief.js"), { timezone: TZ });
-
-// Sunday 5:00 PM — weekly deep brief
-cron.schedule("0 17 * * 0", () => run("weekly_brief.js"), { timezone: TZ });
+// Every 2 minutes — grade explanations submitted from the PWA. Exits without
+// an API call when there is no pending response.
+cron.schedule("*/2 * * * *", () => run("grade_memory.js"), { timezone: TZ });
 
 // Sunday 8:00 PM — backlog curator
 cron.schedule("0 20 * * 0", () => run("curator.js"), { timezone: TZ });
 
 console.log(`[scheduler] started (TZ=${TZ})`);
 console.log("[scheduler] next memory at 6:25 weekday mornings");
-console.log("[scheduler] next daily at 6:30 weekday mornings");
-console.log("[scheduler] next weekly at 5:00 PM Sunday");
+console.log("[scheduler] memory grading checks every 2 minutes");
 console.log("[scheduler] next curator at 8:00 PM Sunday");
 
 // Keep the process alive

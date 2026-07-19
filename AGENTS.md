@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## What this repo is
 
@@ -14,7 +14,7 @@ There are no tests, no linter, no TypeScript, and no package manager lockfile in
 
 ## Non-obvious architecture
 
-**The curator rewrites `frontend/index.html` in place.** `cron/curator.js` reads the file, locates the `// SEED_START` / `// SEED_END` and `// CHANGELOG_START` / `// CHANGELOG_END` comment markers, parses the two JS arrays between them via `vm.runInContext`, asks Claude for additions/removals, then splices the regenerated arrays back between the markers. **Never remove or rename those markers** — the regex match in `curator.js:16-18` will throw and the run will fail.
+**The curator rewrites `frontend/index.html` in place.** `cron/curator.js` reads the file, locates the `// SEED_START` / `// SEED_END` and `// CHANGELOG_START` / `// CHANGELOG_END` comment markers, parses the two JS arrays between them via `vm.runInContext`, asks Codex for additions/removals, then splices the regenerated arrays back between the markers. **Never remove or rename those markers** — the regex match in `curator.js:16-18` will throw and the run will fail.
 
 **Supabase config is committed into `frontend/index.html`.** The `<meta name="supabase-url">` and `<meta name="supabase-anon-key">` tags hold real values in the source. The anon key is a Supabase *publishable* key (`sb_publishable_…`) — it's designed to be public and is safe to commit; RLS + the two `SECURITY DEFINER` RPCs are what gate access. The legacy `deploy.sh` script substitutes these tags from `.env` and is no longer the primary deploy path (see next point), but it still works if you ever need to deploy without a public commit.
 
@@ -57,7 +57,7 @@ There is no `npm test`, no `npm run lint`, no build step. Iterate by running the
 
 There is an ongoing phased redesign turning this from a frontier-news machine into a real learning system: multiple mastery paths, spaced recall, an interest stream from X bookmarks, build challenges, and feedback. Newsletter briefs are explicitly out of scope. Phase 2 is PWA-first via `cron/memory.js`; later outputs should surface in the app rather than recurring news emails.
 
-**Before suggesting architectural changes or starting new work, read `PLAN.md` at the repo root.** It contains locked decisions (so they don't get re-asked), the phase-by-phase status, conventions specific to this work that aren't in this file, and a deployment cheatsheet. The TL;DR is that user preferences are committed for: split storage (mastery in JSONB, bookmarks in their own table), 1/7/30/90/180-day review cadence, async-first audio, dual feedback channels, and Claude-in-Chrome scraping for X bookmarks.
+**Before suggesting architectural changes or starting new work, read `PLAN.md` at the repo root.** It contains locked decisions (so they don't get re-asked), the phase-by-phase status, conventions specific to this work that aren't in this file, and a deployment cheatsheet. The TL;DR is that user preferences are committed for: split storage (mastery in JSONB, bookmarks in their own table), 1/7/30/90/180-day review cadence, async-first audio, dual feedback channels, and Codex-in-Chrome scraping for X bookmarks.
 
 ## Conventions
 

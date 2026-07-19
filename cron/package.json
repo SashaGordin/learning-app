@@ -5,8 +5,8 @@
   "private": true,
   "engines": { "node": ">=20" },
   "scripts": {
-    "daily": "node daily_brief.js",
-    "weekly": "node weekly_brief.js",
+    "memory": "node memory.js",
+    "grade-memory": "node grade_memory.js",
     "curator": "node curator.js",
     "scheduler": "node scheduler.js"
   },
